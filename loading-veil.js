@@ -8,6 +8,7 @@ export function createLoadingVeil(node, options = {}) {
   if (!node) return {show() {}, hide() {}, bootDone() {}, isVisible: () => false, isBlocking: () => false};
   const minShow = options.minShow || MIN_SHOW;
   const fade = options.fade || FADE;
+  const maxWait = options.maxWait ?? 6000;
   const now = options.now || (() => performance.now());
   const label = node.querySelector('[data-loading-label]');
   let shownAt = now();
@@ -15,12 +16,14 @@ export function createLoadingVeil(node, options = {}) {
   let blocking = true;
   let hideTimer = 0;
   let fadeTimer = 0;
+  let revision = 0;
 
   function setLabel(text) {
     if (text && label) label.textContent = text;
   }
 
   function show(text, {min = minShow} = {}) {
+    revision++;
     clearTimeout(hideTimer);
     clearTimeout(fadeTimer);
     hideTimer = fadeTimer = 0;
@@ -49,13 +52,26 @@ export function createLoadingVeil(node, options = {}) {
     }, fade);
   }
 
-  function hide(text) {
+  function hide(text, ready) {
     if (!visible) return;
-    setLabel(text);
+    const ticket = ++revision;
     clearTimeout(hideTimer);
     clearTimeout(fadeTimer);
-    const wait = Math.max(0, minShow - (now() - shownAt));
-    hideTimer = setTimeout(finish, wait);
+    function reveal() {
+      if (revision !== ticket) return;
+      revision++;
+      clearTimeout(hideTimer);
+      setLabel(text);
+      const wait = Math.max(0, minShow - (now() - shownAt));
+      hideTimer = setTimeout(finish, wait);
+    }
+    if (ready) {
+      // An interrupted image request must not freeze gameplay indefinitely.
+      hideTimer = setTimeout(reveal, maxWait);
+      Promise.resolve(ready).then(reveal, reveal);
+    } else {
+      reveal();
+    }
   }
 
   function bootDone(text = '池塘已就绪') {

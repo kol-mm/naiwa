@@ -1,6 +1,6 @@
 import {createGameRenderer} from './game-renderer.js';
 import {createRunStore} from './run-save.js';
-import {selectedCostume,setCostume} from './costumes.js';
+import {costumeImage,selectedCostume,setCostume} from './costumes.js';
 import {creatorLinks,bindCreatorLinks} from './creator.js';
 import {canUseRoomWardrobe,drawRoomWardrobe} from './room-wardrobe.js';
 import {createWardrobe} from './wardrobe.js';
@@ -31,7 +31,7 @@ import {drawTerrain} from './terrain-art.js';
 import {createStatsPanel} from './stats.js';
 import {Game,ITEMS,W,H,CHAPTERS,BOSS_NAMES} from './campaign.js';
 import {drawCampaign,drawBoss,drawRunner} from './campaign-art.js';
-import {assetPath,releaseArt} from './asset-url.js';
+import {artLoaded,assetPath,releaseArt} from './asset-url.js';
 import {readPreferences,writePreferences,renderCap,safeStorage} from './preferences.js';
 import {readConnectedGamepad,gamepadPauseAction} from './gamepad.js';
 import {settingsHTML,bindSettings} from './settings-ui.js';
@@ -122,6 +122,13 @@ function saveCurrentRun(){
  if(ok&&(mode==='win'||mode==='dead'&&game.reviveUsed))hasRun=false;
  return ok;
 }
+function revealChapter(label){
+ const images=prepareChapterArt(game.floor);
+ images.push(costumeImage('original'));
+ if(selectedCostume()!=='original')images.push(costumeImage(selectedCostume()));
+ if(game.room.type==='boss')images.push(...prepareBossArt(game.floor));
+ loadingVeil.hide(label,Promise.all(images.map(artLoaded)));
+}
 function continueRun(){
  loadingVeil.show('正在恢复上次冒险…');
  const saved=runStore.read();if(saved.status!=='ok'){title();loadingVeil.hide('存档暂时无法读取');toast('存档无法读取，请尝试重新打开游戏。');return}
@@ -136,7 +143,7 @@ function continueRun(){
  else if(game.mode==='win')end(true);
  else if(game.mode==='rescue')showRescue();
  else {game.mode='play';overlay.innerHTML='';canvas.focus();last=performance.now()}
- loadingVeil.hide('继续冒险');
+ revealChapter('继续冒险');
 }
 function requestNewRun(){
  const saved=runStore.read();
@@ -156,11 +163,11 @@ window.addEventListener('pagehide',saveCurrentRun);
 window.addEventListener('blur',saveCurrentRun);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)saveCurrentRun()});
 
-function start(){loadingVeil.show('正在进入池塘…');$('#settingsOpen').hidden=false;revivePlayer.stop();voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();bossVoice.reset();itemVoice.reset();voice.unlock();bossVoice.unlock();itemVoice.unlock();keepGameFullscreen(true);void requestGameFullscreen({mobile:touchPointer.matches});resetTouchInput();leaveSandbox();releaseArt();game=new Game();game.start();hasRun=true;panelResume.clear();last=performance.now();if(bossDemo){game.floor=5;game.generate();game.enter(game.rooms.find(r=>r.exists&&r.type==='boss').id,'top');game.hurt=()=>{};game.p.damage=3}floorSeen=game.floor;overlay.innerHTML='';keys.clear();mouse.down=false;updateUI();canvas.focus();beep(650,.15);toast(matchMedia('(pointer:coarse), (max-width:780px), (max-width:1100px) and (max-height:600px)').matches?'左手移动 · 右手十字键射击':'方向键大笑；E 互动；B 炸弹；造成伤害充能，Q 大爆笑击退。');saveCurrentRun();loadingVeil.hide(`第 ${game.floor} 章 · ${CHAPTERS[game.floor-1]}`)}
+function start(){loadingVeil.show('正在进入池塘…');$('#settingsOpen').hidden=false;revivePlayer.stop();voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();bossVoice.reset();itemVoice.reset();voice.unlock();bossVoice.unlock();itemVoice.unlock();keepGameFullscreen(true);void requestGameFullscreen({mobile:touchPointer.matches});resetTouchInput();leaveSandbox();releaseArt();game=new Game();game.start();hasRun=true;panelResume.clear();last=performance.now();if(bossDemo){game.floor=5;game.generate();game.enter(game.rooms.find(r=>r.exists&&r.type==='boss').id,'top');game.hurt=()=>{};game.p.damage=3}floorSeen=game.floor;overlay.innerHTML='';keys.clear();mouse.down=false;updateUI();canvas.focus();beep(650,.15);toast(matchMedia('(pointer:coarse), (max-width:780px), (max-width:1100px) and (max-height:600px)').matches?'左手移动 · 右手十字键射击':'方向键大笑；E 互动；B 炸弹；造成伤害充能，Q 大爆笑击退。');saveCurrentRun();revealChapter(`第 ${game.floor} 章 · ${CHAPTERS[game.floor-1]}`)}
 // 沙盒试玩: a separate free-play run. The saved run stays untouched for 继续游戏.
 function syncSandboxChrome(){document.documentElement.toggleAttribute('data-sandbox',sandbox.active);$('#sandboxTools').hidden=!sandbox.active;const item=document.querySelector('[data-menu-action="sandboxTools"]');if(item)item.hidden=!sandbox.active}
 function leaveSandbox(){if(!sandbox.active)return;sandbox.active=false;sandbox.speed=1;syncSandboxChrome()}
-function startSandboxRun(){loadingVeil.show('正在搭建沙盒…');revivePlayer.stop();voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();bossVoice.reset();itemVoice.reset();voice.unlock();bossVoice.unlock();itemVoice.unlock();keepGameFullscreen(true);void requestGameFullscreen({mobile:touchPointer.matches});resetTouchInput();releaseArt();hasRun=false;Object.assign(sandbox,createSandboxState(),{active:true});game=startSandbox(new Game(),sandbox);floorSeen=game.floor;panelResume.clear();last=performance.now();overlay.innerHTML='';keys.clear();mouse.down=false;syncSandboxChrome();updateUI();canvas.focus();beep(650,.15);toast(mobileMedia.matches?'沙盒试玩：点菜单 ☰ 里的“沙盒工具”切换章节、生成敌人、拿放道具。':'沙盒试玩：按 T 打开沙盒工具，切换章节、生成敌人、拿放道具。');loadingVeil.hide('沙盒已就绪')}
+function startSandboxRun(){loadingVeil.show('正在搭建沙盒…');revivePlayer.stop();voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();bossVoice.reset();itemVoice.reset();voice.unlock();bossVoice.unlock();itemVoice.unlock();keepGameFullscreen(true);void requestGameFullscreen({mobile:touchPointer.matches});resetTouchInput();releaseArt();hasRun=false;Object.assign(sandbox,createSandboxState(),{active:true});game=startSandbox(new Game(),sandbox);floorSeen=game.floor;panelResume.clear();last=performance.now();overlay.innerHTML='';keys.clear();mouse.down=false;syncSandboxChrome();updateUI();canvas.focus();beep(650,.15);toast(mobileMedia.matches?'沙盒试玩：点菜单 ☰ 里的“沙盒工具”切换章节、生成敌人、拿放道具。':'沙盒试玩：按 T 打开沙盒工具，切换章节、生成敌人、拿放道具。');revealChapter('沙盒已就绪')}
 function sandboxPanelOpen(){return game.mode==='paused'&&!!overlay.querySelector('.sandbox-modal')}
 function toggleSandboxPanel(){if(document.body.classList.contains('mobile-panel-open'))return;if(sandboxPanelOpen())resume();else openSandboxPanel()}
 function openSandboxPanel(){if(!sandbox.active||document.body.classList.contains('mobile-panel-open'))return;if(game.mode==='paused'&&!sandboxPanelOpen()&&!overlay.querySelector('#pauseSandboxTools'))return;if(['play','rescue'].includes(game.mode)){pauseMode=game.mode;voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();game.mode='paused'}else if(game.mode!=='paused')return;resetTouchInput();renderSandboxPanel(false);overlay.querySelector('[data-sandbox-tab][aria-selected="true"]')?.focus({preventScroll:true})}
@@ -268,7 +275,7 @@ function showRescue(){clearTimeout(toastTimer);$('#toast').classList.remove('sho
 function toggleSound(){sound=!sound;setGameSound(sound,{voice,bossVoice,itemVoice,soundMix},game.mode==='revive');try{storage?.setItem('naiwa-sound',String(sound))}catch{}syncSound()}
 function syncSound(){for(const id of ['sound','rescueSound']){const b=$('#'+id);if(b)b.textContent='声音 '+(sound?'开':'关')}}
 function processEvents(){let saveNeeded=false;soundMix.beginFrame();const changedRoom=syncRoomVoices(game.room),itemCues=[];for(const e of game.events.splice(0)){if(e.type==='clear'||(e.type==='room'&&e.room))observeCodex(e.room,[]);if(e.type==='choice')observeCodex(game.room,e.choices);if(['room','item','hurt','shield','heal','clear','end','rescue','choice'].includes(e.type))saveNeeded=true;if(e.type==='bossVoice'&&game.mode==='play'){requestBossCue({voice,bossVoice,itemVoice},e)}if(e.type==='itemVoice'&&game.mode==='play')itemCues.push(e.key);if(e.type==='sandyStart'){shake=2;beep(85,.35,'sine',.025,3)}if(e.type==='sandyEnd')beep(260,.22,'triangle',.025);if(e.type==='gojoSplit')beep(760,.15,'triangle',.02);if(e.type==='gojoFuse')beep(390,.16,'sine',.02,2);if(e.type==='gojoBlast'){shake=4;beep(90,.2,'triangle',.025,3)}if(e.type==='room'&&changedRoom)itemCues.length=0;if(e.type==='wardrobe')wardrobe.open();if(e.type==='rescue')showRescue();if(e.type==='cageBreak')playLaugh({long:true});if(e.type==='choice')showChoices(e.title,e.choices);if(e.type==='end')end(e.win);if(e.type==='toast')toast(e.text);if(e.type==='item'||e.type==='choice')codexCheckedAt=0;if(e.type==='item'){if(e.id==='phoebe')itemCues.push('phoebe');if(e.id==='quietbadge')itemCues.push('quiet');const i=ITEMS.find(i=>i.id===e.id);toast(i.name+' · '+i.short);beep(900,.2,'triangle',.025,3);$('#frog-note').textContent='“'+i.name+'？有点怪，再捡一个！”'}if(e.type==='hurt'){game.heroHurtUntil=game.elapsed+.24;shake=5;beep(120,.18,'sawtooth',.025,5)}if(e.type==='shoot'){game.heroLaughUntil=game.elapsed+.22;beep(520,.045)}if(e.type==='kill')beep(240,.08,'triangle');if(e.type==='clear'&&game.mode!=='rescue'){toast('房间清空！门开了，继续探索。');beep(760,.15,'triangle',.025,3)}if(e.type==='dash')beep(360,.12,'triangle',.025,2);if(e.type==='laugh'){playLaugh();game.heroLaughUntil=game.elapsed+.5;beep(150,.25,'square',.012)}if(e.type==='heal')beep(1000,.18,'sine',.025,4);if(e.type!=='shoot')updateUI();}if(game.mode==='play')itemVoice.requestMany(itemCues);soundMix.endFrame();if(saveNeeded)saveCurrentRun();}
-function syncFloorTransition(){if(game.floor===floorSeen)return;floorSeen=game.floor;const text=`第 ${game.floor} 章 · ${CHAPTERS[game.floor-1]}`;loadingVeil.show(`正在前往${text}`);requestAnimationFrame(()=>loadingVeil.hide(text))}
+function syncFloorTransition(){if(game.floor===floorSeen)return;floorSeen=game.floor;const text=`第 ${game.floor} 章 · ${CHAPTERS[game.floor-1]}`;loadingVeil.show(`正在前往${text}`);revealChapter(text)}
 function ellipse(x,y,rx,ry,color,stroke=null,lw=2){ctx.beginPath();ctx.ellipse(x,y,Math.max(.1,rx),Math.max(.1,ry),0,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();if(stroke){ctx.lineWidth=lw;ctx.strokeStyle=stroke;ctx.stroke()}}
 function line(points,color,width=2){ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.lineWidth=width;ctx.lineJoin='round';ctx.lineCap='round';ctx.strokeStyle=color;ctx.stroke()}
 function roundRect(x,y,w,h,r,color,stroke){ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fillStyle=color;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=2;ctx.stroke()}}
