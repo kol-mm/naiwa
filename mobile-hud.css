@@ -1,0 +1,273 @@
+/* Touch layout. The 8:5 room takes the full visible height between two thumb
+   rails: status on the left above the move stick, actions on the right above the
+   attack cross. Nothing is drawn over the room. Geometry follows --game-vw/--game-vh
+   (the browser's visible viewport). Balanced is the default; mobile-comfort.css
+   holds the saved Wide alternative. */
+.mobile-stats,.mobile-menu-layer,.mobile-resource-hud,#mobileMiniMap,.mobile-quick-fullscreen{display:none}
+@media (max-width:780px),(pointer:coarse),(max-width:1100px) and (max-height:600px){
+ html{height:100%;width:100%;overflow:hidden;overscroll-behavior:none}
+ body{position:fixed;inset:0;margin:0;width:100%;height:var(--game-vh,100dvh);overflow:hidden;overscroll-behavior:none;background:var(--night)}
+ .shell{position:absolute;inset:0;margin:0;padding:0;max-width:none;width:var(--game-vw,100%);height:var(--game-vh,100dvh);overflow:hidden}
+ main{display:block;margin:0;padding:0;width:100%;height:100%;min-height:0}
+ header,.game-heading,.key-guide,.footnote,.game-footer,footer,#resources{display:none}
+
+ .game-column{
+  --vw:var(--game-vw,100vw);--vh:var(--game-vh,100dvh);
+  --sa-l:env(safe-area-inset-left,0px);--sa-r:env(safe-area-inset-right,0px);--sa-t:env(safe-area-inset-top,0px);--sa-b:env(safe-area-inset-bottom,0px);
+  /* The player's 画面 ↔ 按键 step (mobile-comfort.css) sets --k, --edge-adj, --fire-in,
+     --stick-in and --lift. Height tiers below set the base sizes and the caps
+     (--k-min/--k-max, --lift-max) so controls never collide on short screens. */
+  --k:1;--k-min:.85;--k-max:1.15;--keff:clamp(var(--k-min),var(--k),var(--k-max));
+  --edge-x:14px;--edge-adj:0px;--fire-in:18px;--stick-in:0px;--lift:4px;--lift-max:4px;--use-gap:20px;
+  --edge-l:calc(var(--edge-x) + var(--edge-adj) + var(--sa-l));--edge-r:calc(var(--edge-x) + var(--edge-adj) + var(--sa-r));--edge-t:calc(8px + var(--sa-t));--edge-b:max(18px,calc(8px + var(--sa-b)));
+  --stick-base:100px;--fire-base:108px;--dash-base:58px;--laugh-w-base:50px;--laugh-h-base:58px;--bomb-h:44px;--slop:12px;
+  --stick:calc(var(--stick-base) * var(--keff));--fire:calc(var(--fire-base) * var(--keff));--dash:calc(var(--dash-base) * var(--keff));--laugh-w:calc(var(--laugh-w-base) * var(--keff));--laugh-h:calc(var(--laugh-h-base) * var(--keff));
+  --rail-gap:10px;--room-pad:8px;
+  --rail-l:max(104px,calc(var(--stick) + var(--stick-in) - 2px));
+  --rail-r:calc(var(--fire-in) + var(--fire) + var(--slop) + 4px - var(--rail-gap));
+  --ctl-b:calc(var(--edge-b) + min(var(--lift),var(--lift-max)));
+  /* Thumb rest: the attack cross and the buttons above it rise off the bottom corner by up
+     to --rest-max, but only into the space left below the pause button / room label. */
+  --stack-gap1:12px;--stack-gap2:8px;--top-reserve:calc(var(--edge-t) + 88px);--rest-max:36px;
+  --lift-room:calc(var(--vh) - var(--ctl-b) - var(--fire) - var(--stack-gap1) - var(--dash) - var(--stack-gap2) - var(--bomb-h) - var(--top-reserve));
+  --rest-lift:clamp(0px,var(--lift-room),var(--rest-max));--fire-b:calc(var(--ctl-b) + var(--rest-lift));
+  /* Move stick thumb zone: below the map button, from the left edge to a quarter into the room. */
+  --stick-zone-w:calc(var(--edge-l) + var(--rail-l) + var(--rail-gap) + (var(--space) - var(--arena)) / 2 + var(--arena) * .24);--stick-zone-h:calc(var(--vh) - var(--edge-t) - 96px);
+  --space:calc(var(--vw) - var(--edge-l) - var(--edge-r) - var(--rail-l) - var(--rail-r) - 2 * var(--rail-gap));
+  --arena:min(var(--space),calc((var(--vh) - var(--sa-t) - var(--sa-b) - 2 * var(--room-pad)) * 1.6));
+  --room-h:calc(var(--arena) * .625);
+  position:absolute;inset:0;display:block;min-height:0;height:100%;padding:0;overflow:hidden;
+  background:radial-gradient(ellipse 62% 85% at 50% 50%,#2c3d38 0%,#1b2725 58%,#121918 100%)
+ }
+
+ /* Room: centred in the space between the rails, framed in brass and night. */
+ .game-frame{position:absolute;left:calc(var(--edge-l) + var(--rail-l) + var(--rail-gap) + (var(--space) - var(--arena)) / 2);top:calc(var(--sa-t) + (var(--vh) - var(--sa-t) - var(--sa-b) - var(--room-h)) / 2);width:var(--arena);height:var(--room-h);border:0!important;border-radius:3px!important;outline:0;overflow:visible;background:#19282b;box-shadow:0 0 0 2px #d8c487,0 0 0 5px var(--frame-dark),0 10px 24px 6px #00000066}
+ .canvas-wrap{width:100%;height:100%;overflow:hidden;border-radius:2px}
+ #game{width:100%;height:100%;aspect-ratio:8/5;touch-action:none}
+
+ /* HUD layer: a viewport-sized, click-through layer that positions the rails' status items. */
+ .hud{position:fixed;inset:0;z-index:12;display:block;height:auto;margin:0;padding:0;border:0;border-radius:0;background:transparent!important;box-shadow:none;pointer-events:none}
+ .hud-label{display:none}
+ .hud>div:first-child{position:absolute;left:var(--edge-l);top:var(--edge-t);width:max-content;min-width:0;max-width:calc(var(--rail-l) + var(--rail-gap) - 2px);display:flex;flex-direction:column;gap:6px;text-align:left}
+ #hearts{display:flex;align-items:center;gap:0;min-height:16px;color:var(--hud-text);font:800 14px/16px var(--font-ui);white-space:nowrap;letter-spacing:0;text-shadow:0 1px 0 #000}
+ #hearts .heart{width:18px;height:16px}
+ .heart-count{margin-left:5px;font-variant-numeric:tabular-nums}
+ .mobile-resource-hud{display:flex;align-items:center;gap:10px;height:18px;color:var(--hud-text);font:800 14px/18px var(--font-ui);font-variant-numeric:tabular-nums;text-shadow:0 1px 0 #000}
+ .hud-resource{display:flex;align-items:center;gap:4px;white-space:nowrap}
+ .hud-resource svg{width:14px;height:14px;shape-rendering:crispEdges;fill:var(--gold);filter:drop-shadow(0 1px 0 #000)}
+ .hud-resource:nth-child(2) svg{fill:#a9d6e3}.hud-resource:nth-child(3) svg{fill:#f0a58e}
+ .room-label{position:absolute;right:var(--edge-r);left:auto;top:calc(var(--edge-t) + 52px);transform:none;width:calc(var(--rail-r) + var(--rail-gap) - 4px);max-width:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right}
+ .room-label strong{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--hud-text);font:800 12px/16px var(--font-ui);letter-spacing:.5px;text-shadow:0 1px 0 #000}
+ .room-label span{display:none}
+ #pause{position:absolute;top:var(--edge-t);right:calc(var(--edge-r) + 50px);width:46px;height:44px;margin:0;padding:0;border:2px solid #6f8a76;border-radius:8px;background:#22302cee;color:var(--hud-text);font:800 18px/1 var(--font-ui);box-shadow:0 3px 0 #0a1110;pointer-events:auto;touch-action:manipulation}
+
+ /* Menu and map entries. */
+ .mobile-nav{position:fixed;inset:0;z-index:13;display:block;pointer-events:none}
+ .mobile-nav button{position:absolute;margin:0;min-width:44px;min-height:44px;padding:2px;border:2px solid #6f8a76;border-radius:8px;background:#22302cee;color:var(--hud-text);font:800 12px/1.1 var(--font-ui);box-shadow:0 3px 0 #0a1110;pointer-events:auto;touch-action:manipulation}
+ .mobile-nav [data-mobile-panel=stats],.mobile-nav [data-mobile-panel=inventory],.mobile-nav #mobileFullscreen{display:none}
+ #mobileMenuToggle{top:var(--edge-t);right:var(--edge-r);width:46px;height:44px}
+ #mobileMenuToggle b{display:block;font-size:16px;line-height:18px}
+ .mobile-nav [data-mobile-panel=map]{left:var(--edge-l);top:calc(var(--edge-t) + 46px);width:var(--rail-l);height:44px;display:flex;align-items:center;justify-content:flex-start;gap:7px;padding:0 6px 0 6px;font-size:13px;white-space:nowrap}
+ .mobile-nav [data-mobile-panel=map]>span:last-child{flex:none}
+ .mobile-nav [data-mobile-panel=map]::after{content:'›';margin-left:auto;color:var(--gold);font-size:18px;line-height:1}
+ #mobileMiniMap{display:grid;grid-template-columns:repeat(5,6px);grid-template-rows:repeat(5,5px);gap:1px;padding:2px;background:#0d1514;border-radius:2px;pointer-events:none}
+ #mobileMiniMap i{background:#647a70;border-radius:0}#mobileMiniMap i.fog{visibility:hidden}
+ #mobileMiniMap i.here{background:#ffd85e;box-shadow:0 0 0 1px #fff4c4}#mobileMiniMap i.boss{background:#e57373}#mobileMiniMap i.treasure{background:#e9c46a}
+ .mobile-nav button[aria-expanded=true]{border-color:var(--gold);background:#3d4c3e}
+
+ /* Compact live stats above the bomb, when height allows. */
+ .mobile-stats{display:grid;gap:1px;position:absolute;left:var(--edge-l);top:calc(var(--edge-t) + 98px);width:var(--rail-l);padding:5px 7px 5px 8px;border-left:3px solid var(--gold);border-radius:0 6px 6px 0;background:#0e1716c7;color:var(--hud-text);font:700 12px/16px var(--font-ui);font-variant-numeric:tabular-nums;pointer-events:none}
+ .mobile-stats div{display:flex;align-items:center;justify-content:space-between;gap:3px}
+ .mobile-stats span{color:var(--hud-muted);font-weight:600}.mobile-stats b{font-size:13px;font-weight:800;color:var(--hud-text);padding:0 2px;border-radius:2px}
+
+ /* Controls share one skin; ids place them. */
+ .mobile-controls,.touch-actions,.action-guide{display:contents}
+ .touch-actions button,.action-guide button{position:absolute;z-index:11;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;margin:0;padding:3px;border:2px solid #8ea488;border-radius:10px;background:linear-gradient(#3a4d45,#2a3934);color:var(--hud-text);box-shadow:0 3px 0 #0a1110,inset 0 1px 0 #ffffff1f;font:800 13px/1.15 var(--font-ui);touch-action:none;-webkit-tap-highlight-color:transparent;transform:none}
+ .touch-actions button small,.action-guide button small{display:block;font-size:10px;font-weight:700;line-height:1.15;color:inherit;opacity:.92;white-space:nowrap;pointer-events:none}
+ .touch-actions button>span,.action-guide button>span{pointer-events:none;white-space:nowrap}.key-label{display:none}
+ .touch-actions button[aria-disabled=true],.action-guide button[aria-disabled=true]{filter:saturate(.45) brightness(.82)}
+ .touch-actions button.held,.action-guide button.held{transform:translateY(2px);box-shadow:0 1px 0 #0a1110,inset 0 2px 6px #00000055;filter:brightness(1.12)}
+
+ /* The fixed ring stays inside the safe area; its larger touch target stays available. */
+ #stick{position:absolute;z-index:11;left:0;bottom:0;width:var(--stick-zone-w);height:var(--stick-zone-h);--ring-left:max(var(--sa-l),calc(var(--edge-l) + var(--stick-in)));--ring-bottom:max(var(--sa-b),var(--ctl-b));border:0;border-radius:0;background:transparent;box-shadow:none;touch-action:none}
+ #stick::before{content:'';position:absolute;box-sizing:border-box;left:var(--ring-left);bottom:var(--ring-bottom);width:var(--stick);height:var(--stick);border:2px solid #a8bf9b88;border-radius:50%;background:radial-gradient(circle,#ffffff14 0 34%,#ffffff08 35% 100%);box-shadow:inset 0 0 0 8px #0d151455,0 3px 0 #0a111066;pointer-events:none}
+ #stick::after{content:'';position:absolute;box-sizing:border-box;left:calc(var(--ring-left) + 14px);bottom:calc(var(--ring-bottom) + 14px);width:calc(var(--stick) - 28px);height:calc(var(--stick) - 28px);border:1px dashed #c3d4b244;border-radius:50%;pointer-events:none}
+ #stick span{position:absolute;z-index:1;width:46px;height:46px;left:calc(var(--ring-left) + var(--stick) / 2 - 23px);top:auto;bottom:calc(var(--ring-bottom) + var(--stick) / 2 - 23px);border:2px solid #1d2f27;border-radius:50%;background:radial-gradient(circle at 40% 35%,#dff0b8,#9dbb78 60%,#6f9157);box-shadow:0 3px 0 #0a1110;pointer-events:none}
+ #stick em{position:absolute;inset:auto;z-index:2;left:var(--ring-left);bottom:var(--ring-bottom);width:var(--stick);height:var(--stick);display:grid;place-items:center;color:#1c3027;font:800 12px/1 var(--font-ui);font-style:normal;pointer-events:none;transition:opacity .15s}
+ #stick.held::before{border-color:#f3dc9a;background:radial-gradient(circle,#ffe7a120 0 34%,#ffffff0d 35% 100%)}
+ #stick.held em{opacity:0}
+
+ /* Attack cross: the visible pad sits inside an invisible slop margin. */
+ #touchFire{right:calc(var(--edge-r) + var(--fire-in) - var(--slop));bottom:calc(var(--fire-b) - var(--slop));width:calc(var(--fire) + 2 * var(--slop));height:calc(var(--fire) + 2 * var(--slop));padding:0;border:0;border-radius:24px;background:transparent;box-shadow:none;color:var(--hud-text);font-size:16px}
+ #touchFire::before{content:'';position:absolute;inset:var(--slop);border:2px solid #8ea48877;border-radius:16px;background:#162220d9;box-shadow:0 4px 0 #0a1110,inset 0 0 0 3px #ffffff0d;pointer-events:none}
+ #touchFire *{pointer-events:none}
+ #touchFire .attack-cross{position:absolute;inset:calc(var(--slop) + 5px);background:linear-gradient(#6f8f60,#557447);clip-path:polygon(33% 0,67% 0,67% 33%,100% 33%,100% 67%,67% 67%,67% 100%,33% 100%,33% 67%,0 67%,0 33%,33% 33%)}
+ #touchFire .attack-arrow{position:absolute;display:grid;place-items:center;width:calc((var(--fire) - 10px) / 3);height:calc((var(--fire) - 10px) / 3);color:#f6f0cf;font-size:14px;font-style:normal;line-height:1;text-shadow:0 2px 0 #1f3324;border-radius:4px}
+ #touchFire .up{top:calc(var(--slop) + 5px);left:calc(var(--slop) + 5px + (var(--fire) - 10px) / 3)}
+ #touchFire .down{bottom:calc(var(--slop) + 5px);left:calc(var(--slop) + 5px + (var(--fire) - 10px) / 3)}
+ #touchFire .left{left:calc(var(--slop) + 5px);top:calc(var(--slop) + 5px + (var(--fire) - 10px) / 3)}
+ #touchFire .right{right:calc(var(--slop) + 5px);top:calc(var(--slop) + 5px + (var(--fire) - 10px) / 3)}
+ #touchFire .attack-thumb{position:absolute;left:calc(var(--slop) + 5px + (var(--fire) - 10px) / 3 + 2px);top:calc(var(--slop) + 5px + (var(--fire) - 10px) / 3 + 2px);width:calc((var(--fire) - 10px) / 3 - 4px);height:calc((var(--fire) - 10px) / 3 - 4px);display:grid;place-items:center;border:2px solid #213528;border-radius:6px;background:radial-gradient(circle at 40% 35%,#f2f6d8,#b5c98e);color:#213528;font:800 11px/1 var(--font-ui);box-shadow:0 2px 0 #10201566;transform:translate(var(--aim-x,0px),var(--aim-y,0px))}
+ #touchFire[data-direction=up] .up,#touchFire[data-direction=down] .down,#touchFire[data-direction=left] .left,#touchFire[data-direction=right] .right{color:#2a2208;background:var(--gold);box-shadow:inset 0 0 0 2px #fff1b8,0 0 10px #ffd66e88;text-shadow:none}
+ #touchFire.held::before{border-color:#f3dc9a99}
+
+ /* Dash: the ring empties while it recharges and turns gold when ready. */
+ #touchDash{right:calc(var(--edge-r) + 4px + var(--laugh-w) + 8px);bottom:calc(var(--fire-b) + var(--fire) + var(--stack-gap1));width:var(--dash);height:var(--dash);padding:0;border-radius:50%;border:0;color:#2a2410;background:radial-gradient(circle,#f7da7d 0 calc(50% - 6px),#3b2f12 calc(50% - 5px) calc(50% - 4px),transparent calc(50% - 3px)),conic-gradient(#fff1b4 var(--cooldown,100%),#46524c 0);box-shadow:0 3px 0 #0a1110,0 0 0 2px #0f1817}
+ #touchDash[data-ready=false]{color:var(--hud-text);background:radial-gradient(circle,#344640 0 calc(50% - 6px),#0f1817 calc(50% - 5px) calc(50% - 4px),transparent calc(50% - 3px)),conic-gradient(#f2cf6a var(--cooldown,100%),#46524c 0)}
+ #touchDash[data-ready=true][aria-disabled=false]{box-shadow:0 3px 0 #0a1110,0 0 0 2px #0f1817,0 0 12px #ffd66e66}
+
+ /* Big Laugh: fills with charge and glows when full. */
+ #touchActive{right:calc(var(--edge-r) + 4px);bottom:calc(var(--fire-b) + var(--fire) + var(--stack-gap1));width:var(--laugh-w);height:var(--laugh-h);padding:2px 1px;overflow:hidden;border-color:#c49a52;border-radius:12px;color:#ffe6a6;background:linear-gradient(to top,#c98a2c var(--charge,0%),#353a31 var(--charge,0%));font-size:12px}
+ #touchActive small{font-size:10px;letter-spacing:-.3px}
+ .action-guide #touchActive[data-ready=true]{color:#2a1f08;border-color:#fff0b6;background:linear-gradient(#ffe48a,#f0b53d);box-shadow:0 3px 0 #6b4a16,0 0 0 2px #0f1817,0 0 14px #ffd66e99;animation:laugh-charged 1.8s ease-in-out infinite}
+ .action-guide #touchActive[data-ready=true] small{font-weight:800}
+ /* The narrow Balanced button says "就绪"; Wide has room for the full label. */
+ :root:not([data-touch-layout=wide]) .action-guide #touchActive[data-ready=true] small{display:none}
+ :root:not([data-touch-layout=wide]) .action-guide #touchActive[data-ready=true]::after{content:'就绪';display:block;margin-top:1px;padding:0 4px;border-radius:3px;background:#3a2a08;color:#ffe48a;font-size:10px;font-weight:900;line-height:14px}
+ .action-guide #touchActive[data-ready-flash=true]{animation:laugh-charge-arrival .8s ease-out both}
+ .action-guide #touchActive[data-playing=false]{animation:none}
+
+ /* Right rail, top to bottom: bomb, dash | Big Laugh, attack cross. Contextual
+    interaction sits on the left rail directly above the move stick. */
+ #touchBomb{left:auto;right:calc(var(--edge-r) + 4px);bottom:calc(var(--fire-b) + var(--fire) + var(--stack-gap1) + var(--dash) + var(--stack-gap2));width:calc(var(--rail-r) + var(--rail-gap) - 8px);height:var(--bomb-h);min-height:44px;flex-direction:row;gap:6px;padding:2px 8px;border-color:#c48a72;color:#ffe3d0;background:linear-gradient(#6a4440,#4c302d)}
+ #touchBomb::before{content:'';width:18px;height:18px;flex:none;background:#ffd2bf;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M9 0h4v2h-2v3h2v2h2v6h-2v2H3v-2H1V7h2V5h5V2h1z'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M9 0h4v2h-2v3h2v2h2v6h-2v2H3v-2H1V7h2V5h5V2h1z'/%3E%3C/svg%3E") center/contain no-repeat;pointer-events:none}
+ #touchUse{left:var(--edge-l);right:auto;bottom:calc(var(--ctl-b) + var(--stick) + var(--use-gap));width:var(--rail-l);height:44px;min-height:44px;flex-direction:row;gap:6px;padding:2px 8px;border-color:#f0d898;color:#2c3a28;background:linear-gradient(#fff3cf,#efd99a);box-shadow:0 3px 0 #6b5a2c,0 0 0 2px #0f1817}
+ #touchUse small{font-size:10px;color:#5a4a1e;opacity:1;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+ #touchUse[data-ready=false]{visibility:hidden;pointer-events:none}
+
+ /* In-room overlays: boss plate and toast stay legible on bright floors. */
+ .bossbar{position:absolute;left:50%;right:auto;top:6px;transform:translateX(-50%);width:min(62%,360px);padding:3px 8px 5px;border:2px solid #e9c46a;border-radius:6px;background:#1c1622e6;box-shadow:0 2px 0 #00000066;color:#fff3d1;font:800 12px/16px var(--font-ui);text-align:center;text-shadow:none;pointer-events:none}
+ .bossbar>div{height:7px;margin-top:2px;border:1px solid #000;border-radius:2px;background:#3f2a35;overflow:hidden}
+ .toast{bottom:10px;max-width:86%;width:max-content;padding:6px 12px;border:2px solid #e9c46a;border-radius:6px;background:#162220f0;color:var(--hud-text);font:700 13px/1.45 var(--font-ui);white-space:normal;text-align:center;box-shadow:0 3px 0 #0008;pointer-events:none}
+
+ /* Dialog layer over the whole screen. */
+ .overlay{position:fixed;inset:0;bottom:auto;height:var(--game-vh,100dvh);z-index:35;padding:10px max(14px,env(safe-area-inset-right,0px)) 10px max(14px,env(safe-area-inset-left,0px));background:#0c1413d9;backdrop-filter:blur(2px);overflow:hidden}
+ .modal{width:min(500px,100%);max-height:calc(var(--game-vh,100dvh) - 20px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow:auto;padding:14px 18px;overscroll-behavior:none;touch-action:pan-y}
+ .hero-frog{width:64px;height:53px}.modal h2{font-size:21px;margin:2px 0 6px}.modal p{font-size:13px;margin:5px 0;line-height:1.6}.modal .mini{font-size:9px}
+ .modal .primary{min-height:46px;padding:10px 22px;margin-top:10px}
+ .instructions{font-size:13px;line-height:1.85;touch-action:pan-y;overscroll-behavior:none}
+ .choice-list{margin-top:10px;gap:8px}.choice{min-height:118px}
+ #mobileBackdrop{position:fixed;inset:0;bottom:auto;height:var(--game-vh,100dvh);z-index:40;border:0;background:#0c1413d9;touch-action:none}
+
+ /* Information sheets (map, stats, inventory) opened from the rails or the menu. */
+ aside{display:none}
+ aside[data-open-panel]{position:fixed;z-index:41;top:calc(var(--game-vh,100dvh) / 2);left:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;width:min(600px,calc(100vw - 28px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));max-height:calc(var(--game-vh,100dvh) - 20px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));margin:0;padding:0;overflow:hidden;overscroll-behavior:none;touch-action:pan-y;background:var(--cream);color:var(--ink);border:3px solid var(--frame-dark);border-radius:8px;box-shadow:0 0 0 2px #d8c487,6px 6px 0 #00000066}
+ aside[data-open-panel]>section,aside[data-open-panel]>.note{display:none}
+ aside[data-open-panel=map]>.map-panel,aside[data-open-panel=stats]>.stats-panel,aside[data-open-panel=inventory]>.inventory-panel{display:block;flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;margin:0;padding:12px 16px 14px;border:0;border-radius:0;background:transparent;box-shadow:none}
+ aside[data-open-panel] .panel-title{min-height:44px;margin:0 0 8px;padding-right:118px}
+ aside[data-open-panel] .mobile-panel-close{position:absolute;z-index:2;top:10px;right:12px;display:flex;align-items:center;justify-content:center;gap:4px;min-width:104px;min-height:44px;margin:0;padding:6px 12px;border:2px solid var(--leaf-dark);border-radius:6px;background:var(--leaf);color:#fff6da;font:800 14px/1 var(--font-ui);box-shadow:0 3px 0 var(--leaf-dark)}
+ aside .map{width:min(330px,100%);max-width:100%;margin:6px auto 10px;gap:4px}aside .map-cell{height:30px;font-size:16px}
+ aside .inventory{max-height:none}
+ .mobile-panel-open .touch-actions button,.mobile-panel-open #stick,.mobile-panel-open .action-guide button{pointer-events:none}
+
+ /* Adventure menu. */
+ .mobile-menu-layer:not([hidden]){position:fixed;inset:0;bottom:auto;height:var(--game-vh,100dvh);z-index:44;display:grid;place-items:center;padding:10px max(14px,env(safe-area-inset-right,0px)) 10px max(14px,env(safe-area-inset-left,0px));background:#0c1413c2;touch-action:auto}
+ .mobile-menu-layer,aside[data-open-panel],.rotate-phone{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+ .mobile-menu-sheet{width:min(560px,94vw);max-height:calc(var(--game-vh,100dvh) - 20px);overflow:auto;overscroll-behavior:none;touch-action:pan-y;padding:0 16px 0;background:var(--cream);color:var(--ink);border:3px solid var(--frame-dark);border-radius:8px;box-shadow:0 0 0 2px #d8c487,6px 6px 0 #00000066}
+ .mobile-menu-heading{position:sticky;top:0;z-index:1;display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 -16px 10px;padding:12px 16px 8px;background:var(--cream);border-bottom:2px solid var(--cream-3)}
+ .mobile-menu-heading h2{margin:0;font-size:18px;font-weight:900;color:var(--ink)}
+ .mobile-menu-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+ .mobile-menu-grid button{display:flex;align-items:center;justify-content:flex-start;gap:8px;min-height:50px;padding:6px 10px;border:2px solid #b9a978;border-radius:6px;background:var(--cream-2);color:var(--ink);font:800 14px/1.2 var(--font-ui);text-align:left;box-shadow:0 2px 0 #b9a978;touch-action:manipulation}
+ .mobile-menu-grid button::before{content:'';width:20px;height:20px;flex:none;background:var(--leaf);-webkit-mask:var(--icon) center/contain no-repeat;mask:var(--icon) center/contain no-repeat}
+ .mobile-menu-grid [data-menu-action=map]{--icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M0 0h3v3H0zM4 0h2v3H4zM7 0h3v3H7zM0 4h3v2H0zM4 4h2v2H4zM7 4h3v2H7zM4 7h2v3H4z'/%3E%3C/svg%3E")}
+ .mobile-menu-grid [data-menu-action=stats]{--icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M0 6h2v4H0zM4 3h2v7H4zM8 0h2v10H8z'/%3E%3C/svg%3E")}
+ .mobile-menu-grid [data-menu-action=inventory]{--icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M3 0h4v1h1v2h2v7H0V3h2V1h1zm1 1v2h2V1zM2 5v1h6V5z'/%3E%3C/svg%3E")}
+ .mobile-menu-grid [data-menu-action=mobileFullscreen]{--icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M0 0h4v2H2v2H0zM6 0h4v4H8V2H6zM0 6h2v2h2v2H0zM8 6h2v4H6V8h2z'/%3E%3C/svg%3E")}
+ .mobile-menu-grid [data-menu-action=sound]{--icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M0 3h2l3-3h1v10H5L2 7H0zM7 3h1v4H7zM9 1h1v8H9z'/%3E%3C/svg%3E")}
+ .mobile-menu-grid [data-menu-action=help]{--icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 0h6v1h1v4H8v1H6v2H4V5h1V4h2V2H3v2H1V1h1zM4 9h2v1H4z'/%3E%3C/svg%3E")}
+ .mobile-menu-grid button[aria-pressed=true]{background:#dfe8b8;border-color:var(--leaf)}
+ #mobileMenuClose{position:sticky;bottom:0;z-index:1;display:block;width:calc(100% + 32px);min-height:48px;margin:12px -16px 0;border:0;border-top:2px solid var(--leaf-dark);border-radius:0 0 4px 4px;background:var(--leaf);color:#fff6da;font:900 15px/1 var(--font-ui);touch-action:manipulation}
+
+ /* Shop sizing on phones: the whole dialog fits the visible height. */
+ .purchase-modal{width:min(720px,100%);height:calc(var(--game-vh,100dvh) - 20px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));max-height:100%;padding:10px 12px 12px;gap:8px;overflow:hidden}
+ .purchase-body{flex:1;overflow:hidden;gap:10px}
+ .purchase-list{height:100%;overscroll-behavior:none}
+ .purchase-detail,.purchase-description{touch-action:pan-y;overscroll-behavior:none}
+
+ /* Rescue: the cage scene shrinks before the tap target or progress does. */
+ .modal.rescue-modal{width:min(640px,94vw);height:min(430px,calc(var(--game-vh,100dvh) - 20px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)));display:flex;flex-direction:column;gap:6px;padding:12px;overflow:hidden}
+ .rescue-modal h2{flex:none;margin:0;font-size:20px}
+ .rescue-modal #rescueScene{flex:1;min-height:0;height:0;max-height:none;width:100%;aspect-ratio:32/13;object-fit:contain}
+ .rescue-modal .mini,.rescue-modal small{display:none}
+ .rescue-modal p{flex:none;margin:0;font-size:12px;line-height:1.5}
+ .rescue-modal .rescue-controls{flex:none;margin:0;min-height:52px}
+ .rescue-modal .rescue-controls button{margin:0;min-height:52px}
+}
+
+/* Height steps: stats compress, then yield; controls shrink only in shallow browsers. */
+@media (max-width:780px) and (orientation:landscape) and (max-height:375px),(pointer:coarse) and (orientation:landscape) and (max-height:375px),(max-width:1100px) and (max-height:375px) and (orientation:landscape){
+ .mobile-stats{gap:0;padding:3px 6px 3px 7px;font-size:11px;line-height:14px}.mobile-stats b{font-size:12px}
+}
+@media (max-width:780px) and (orientation:landscape) and (max-height:299px),(pointer:coarse) and (orientation:landscape) and (max-height:299px),(max-width:1100px) and (max-height:299px) and (orientation:landscape){
+ .mobile-stats{display:none}
+}
+/* Caps on the player's larger steps: the left rail keeps the stats clear of the
+   interaction slot above the stick. */
+@media (max-width:780px) and (orientation:landscape) and (min-height:420px),(pointer:coarse) and (orientation:landscape) and (min-height:420px){
+ .game-column{--lift-max:12px}
+}
+@media (max-width:780px) and (orientation:landscape) and (max-height:389px),(pointer:coarse) and (orientation:landscape) and (max-height:389px),(max-width:1100px) and (max-height:389px) and (orientation:landscape){
+ .game-column{--k-max:1.05;--use-gap:16px}
+}
+/* Below 360px the controls are slightly smaller. */
+@media (max-width:780px) and (orientation:landscape) and (max-height:359px),(pointer:coarse) and (orientation:landscape) and (max-height:359px),(max-width:1100px) and (max-height:359px) and (orientation:landscape){
+ .game-column{--edge-b:max(14px,calc(6px + env(safe-area-inset-bottom,0px)));--stick-base:88px;--fire-base:92px;--slop:10px;--dash-base:52px;--laugh-w-base:48px;--laugh-h-base:52px;--bomb-h:44px;--room-pad:6px;--row-gap:6px;--k-min:.92;--k-max:1.05;--use-gap:12px;--stack-gap1:10px;--stack-gap2:var(--row-gap);--top-reserve:calc(var(--edge-t) + 50px)}
+ .room-label{display:none}
+ #touchFire .attack-thumb{font-size:10px}
+ .modal .hero-frog{display:none}
+ .mobile-menu-grid button{min-height:46px}.mobile-menu-heading{padding:8px 16px 6px;margin-bottom:8px}#mobileMenuClose{min-height:46px;margin-top:8px}
+}
+/* Shallow browsers: the stats yield to the interaction slot above the stick. */
+@media (max-width:780px) and (orientation:landscape) and (max-height:339px),(pointer:coarse) and (orientation:landscape) and (max-height:339px),(max-width:1100px) and (max-height:339px) and (orientation:landscape){
+ .game-column{--k-max:1.1}
+ .mobile-stats{display:none}
+}
+@media (max-width:780px) and (orientation:landscape) and (max-height:300px),(pointer:coarse) and (orientation:landscape) and (max-height:300px),(max-width:1100px) and (max-height:300px) and (orientation:landscape){
+ .game-column{--fire-base:88px;--dash-base:48px;--laugh-w-base:46px;--laugh-h-base:48px;--row-gap:4px;--k-min:1;--k-max:1;--stack-gap1:8px}
+}
+/* Tablets in landscape have room for larger thumbs targets. */
+@media (pointer:coarse) and (orientation:landscape) and (min-height:560px){
+ .game-column{--stick-base:124px;--fire-base:132px;--slop:14px;--dash-base:66px;--laugh-w-base:60px;--laugh-h-base:66px;--bomb-h:52px;--edge-x:24px;--edge-b:max(28px,calc(12px + env(safe-area-inset-bottom,0px)));--lift-max:12px}
+ #hearts .heart{width:27px;height:24px}
+}
+/* Very short landscape rescue: scene left, progress and tap target right. */
+@media (max-height:350px) and (orientation:landscape){
+ .modal.rescue-modal{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);grid-template-rows:auto 1fr auto auto;gap:6px 12px}
+ .rescue-modal h2{grid-column:1 / -1;font-size:18px}.rescue-modal #rescueScene{grid-column:1;grid-row:2 / 5;width:100%;height:100%;min-height:0}
+ .rescue-modal #rescueMessage{grid-column:2;grid-row:2;align-self:center}.rescue-modal progress{grid-column:2;grid-row:3}.rescue-modal .rescue-controls{grid-column:2;grid-row:4;gap:4px;flex-wrap:wrap}
+ .rescue-modal .rescue-controls .primary{flex:1 1 100%;min-width:0;padding:5px}
+}
+/* Portrait phones get a rotate prompt. */
+@media (max-width:780px) and (orientation:portrait),(pointer:coarse) and (orientation:portrait){
+ .rotate-phone{position:fixed;inset:0;bottom:auto;height:var(--game-vh,100dvh);z-index:60;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;padding:36px;text-align:center;background:radial-gradient(ellipse at 50% 40%,#2c3d38,#141d1c 70%);color:var(--hud-text)}
+ .rotate-icon{width:104px;height:60px;display:grid;place-items:center;border:3px solid #d8c487;border-radius:10px;box-shadow:0 0 0 3px var(--frame-dark),0 4px 0 3px #0008;color:var(--gold);font-size:30px;animation:rotate-hint 2.4s ease-in-out infinite}
+ .rotate-phone h2{margin:12px 0 0;font-size:25px;font-weight:900}.rotate-phone p{margin:0;color:var(--hud-muted);font-size:15px;line-height:1.9}.rotate-phone small{margin-top:18px;color:#9fb0a2;font-size:12px}
+ @keyframes rotate-hint{0%,25%{transform:rotate(-90deg)}55%,100%{transform:rotate(0)}}
+}
+@media (prefers-reduced-motion:reduce){.rotate-icon{animation:none!important}}
+
+/* Very shallow shop: the heading collapses to one line. */
+@media (orientation:landscape) and (max-height:320px){
+ .purchase-modal{padding:7px 8px 8px;gap:5px}
+ .purchase-modal .purchase-title p{display:none}.modal.purchase-modal h2{font-size:15px;line-height:22px}
+ .purchase-heading .purchase-leave{min-height:44px}
+}
+@keyframes laugh-charged{50%{border-color:#fffbe6;box-shadow:0 3px 0 #6b4a16,0 0 0 2px #0f1817,0 0 22px #ffd66ecc}}
+@keyframes laugh-charge-arrival{0%{box-shadow:0 3px 0 #6b4a16,0 0 0 1px #ffe49b}45%{box-shadow:0 3px 0 #6b4a16,0 0 0 6px #ffe49b99,0 0 22px #ffd66e99}100%{box-shadow:0 3px 0 #6b4a16,0 0 0 10px #ffe49b00}}
+@media (prefers-reduced-motion:reduce){.action-guide #touchActive[data-ready=true],.action-guide #touchActive[data-ready-flash=true]{animation:none}}
+@media (max-width:780px),(pointer:coarse),(max-width:1100px) and (max-height:600px){
+ aside[data-open-panel=inventory] .inventory{grid-template-columns:repeat(2,minmax(0,1fr))}
+ aside[data-open-panel=stats] .stats-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
+/* Short screens: the opening tip should not eat a quarter of the room. */
+@media (max-height:420px){
+ .toast{max-width:92%;padding:5px 9px;font-size:11px;line-height:1.35;bottom:6px}
+}
+
+/* Wide touch screens have room outside the arena: shift the attack hitbox toward the
+   screen edge instead of taking that width away from the room. */
+@media (min-width:700px) and (min-height:700px) and (pointer:coarse){
+ .game-column{--rail-r:calc(var(--fire-in) + var(--fire) + 4px - var(--rail-gap))}
+ #touchFire{right:calc(var(--edge-r) + var(--fire-in) - var(--slop) - var(--slop))}
+}
