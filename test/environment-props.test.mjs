@@ -23,7 +23,7 @@ test('fuses freeze while paused and destroyed barrels stay gone on revisits',()=
  const g=setup(),r=g.rooms.find(r=>r.exists&&r.type==='fight');g.enter(r.id,'left');r.enemies=[];r.clear=true;r.hazards=[];const o=barrel(480,300);r.obstacles=[o];armBarrel(g,o);g.mode='paused';step(g,1);assert.equal(o.fuse,.85);g.mode='play';step(g,.86);g.enter(12,'right');g.enter(r.id,'left');assert.equal(r.obstacles.length,0);
 });
 test('crowded geometry reduces only its own combat budget and does not change resource guards',()=>{
- for(let floor=1;floor<=5;floor++)for(const type of ['fight','challenge']){const r={type,seed:6};const open=encounterCount(r,floor);assert.equal(encounterCount({...r,crowdingPenalty:2},floor),open-2)}
+ for(let floor=1;floor<=5;floor++)for(const type of ['fight','challenge']){const r={type,seed:6};const open=encounterCount(r,floor);assert.equal(encounterCount({...r,crowdingPenalty:2},floor),Math.max(4,open-2))}
  for(const type of ['vault','cache'])assert.equal(encounterCount({type,seed:6,crowdingPenalty:2},5),encounterCount({type,seed:6},5));
  const g=new Game(()=>.25);const rooms=g.rooms.filter(r=>r.layoutId);assert.ok(rooms.some(r=>r.crowdingPenalty>0));assert.ok(rooms.every(r=>r.crowdingPenalty>=0&&r.crowdingPenalty<=2));
 });

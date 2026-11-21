@@ -13,12 +13,12 @@ test('joystick ignores hand jitter, scales smoothly and caps diagonal speed',()=
 });
 test('joystick owns one finger, starts neutral and can be reset while held by a menu',()=>{
  const el=new EventTarget(),view=new EventTarget(),changes=[];el.ownerDocument={defaultView:view};let captured=null;
- el.setPointerCapture=id=>captured=id;el.hasPointerCapture=id=>captured===id;el.releasePointerCapture=()=>captured=null;el.getBoundingClientRect=()=>({width:100});
+ el.setPointerCapture=id=>captured=id;el.hasPointerCapture=id=>captured===id;el.releasePointerCapture=()=>captured=null;el.getBoundingClientRect=()=>({left:0,top:0,width:100,height:100});
  const reset=bindStickControl(el,(v,held)=>changes.push({...v,held}));
  const send=(type,id,x,y)=>{const e=new Event(type,{cancelable:true});Object.assign(e,{pointerId:id,button:0,clientX:x,clientY:y});el.dispatchEvent(e)};
- send('pointerdown',1,20,20);assert.deepEqual(changes.at(-1),{x:0,y:0,held:true});
+ send('pointerdown',1,50,50);assert.deepEqual(changes.at(-1),{x:0,y:0,held:true});
  send('pointermove',2,100,100);assert.equal(changes.length,1);
- send('pointermove',1,70,20);assert.equal(changes.at(-1).x,1);
+ send('pointermove',1,90,50);assert.equal(changes.at(-1).x,1);
  reset();assert.equal(captured,null);assert.deepEqual(changes.at(-1),{x:0,y:0,held:false});
  send('pointermove',1,90,20);assert.equal(changes.length,3);
  send('pointerdown',2,80,20);assert.equal(changes.at(-1).held,true);

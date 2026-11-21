@@ -4,8 +4,19 @@ import {Game} from '../dist/campaign.js';
 import {spawnEncounter,LAYOUTS,blocked} from '../dist/terrain.js';
 import {CHAPTER_LAYOUTS} from '../dist/chapter-content.js';
 function room(floor,type){const g=new Game();g.start();g.floor=floor;g.generate();const r=g.rooms.find(r=>r.exists&&r.type===type);r.locked=false;r.bombLocked=false;g.enter(r.id,'top');return g}
-test('ordinary, challenge and resource rooms have larger mixed groups without duplicated runners or medics',()=>{
- for(let f=1;f<=5;f++)for(const type of ['fight','challenge']){const g=room(f,type);const counts=new Set();for(let v=0;v<9;v++){g.room.seed=v;g.room.encounterProfile=v%8;const mobs=spawnEncounter(g,g.room);counts.add(mobs.length);assert.equal(mobs.length,5+f+Math.floor(v/3)+(type==='challenge'?1:0)-(g.room.crowdingPenalty||0));for(const t of ['runner','stitchMedic','conductor'])assert.ok(mobs.filter(e=>e.type===t).length<=1)}assert.equal(counts.size,3)}
+test('first-floor fights have four to five enemies and later floors and challenge rooms keep their budgets',()=>{
+ for(let f=1;f<=5;f++)for(const type of ['fight','challenge']){
+  const g=room(f,type),counts=new Set();
+  g.room.crowdingPenalty=0;
+  for(let seed=0;seed<9;seed++){
+   g.room.seed=seed;g.room.encounterProfile=seed%8;
+   const mobs=spawnEncounter(g,g.room);counts.add(mobs.length);
+   const expected=f===1&&type==='fight'?(seed<3?4:5):5+f+Math.floor(seed/3)+(type==='challenge'?1:0);
+   assert.equal(mobs.length,expected);
+   for(const t of ['runner','stitchMedic','conductor'])assert.ok(mobs.filter(e=>e.type===t).length<=1);
+  }
+  assert.equal(counts.size,f===1&&type==='fight'?2:3);
+ }
  for(const type of ['vault','cache']){const g=room(1,type),min=type==='vault'?4:3;assert.ok(g.room.enemies.length>=min&&g.room.enemies.length<=min+2)}
 });
 test('frontline health improves while runners and support units keep their old health',()=>{
@@ -47,4 +58,29 @@ test('contact knockback never leaves the frog inside a crate or wall',()=>{
  g.hurt();
  assert.ok(Math.hypot(g.p.x-e.x,g.p.y-e.y)>20,'the frog should still move off the enemy');
  assert.ok(!blocked(r,g.p.x,g.p.y,g.p.r),'the push must not tunnel into the crate');
+});
+
+test('an ordinary shot nudges a mobile enemy along its trajectory once per volley without stun',()=>{
+ const g=room(1,'fight');g.room.obstacles=[];g.room.hazards=[];
+ const e=g.spawn('brute',480,300);g.room.enemies=[e];
+ g.p.x=420;g.p.y=306;g.p.inv=2;g.p.damage=1;g.enemySpeed=()=>0;
+ g.shoot(1,0);g.shoot(1,0);
+ const hp=e.hp;
+ for(let i=0;i<6;i++)g.update(.02,{});
+ assert.equal(e.hp,hp-2);assert.equal(e.x,484);assert.equal(e.y,300);
+ assert.ok(!e.repelled);
+});
+
+test('normal recoil respects terrain, room edges, fixed targets and companion shots',()=>{
+ const g=room(1,'fight');g.room.obstacles=[];
+ const shot={vx:490,vy:0,hits:new Set()};
+ const mob=g.spawn('brute',480,300);
+ g.room.obstacles=[{kind:'pillar',x:480+mob.r+21,y:300,r:20}];
+ g.onBulletHit(mob,shot);assert.equal(mob.x,480);
+ g.room.obstacles=[];
+ for(const type of ['boss','turret']){
+  const fixed=g.spawn(type,480,300);g.onBulletHit(fixed,shot);assert.equal(fixed.x,480);
+ }
+ g.onBulletHit(mob,{...shot,pet:true});assert.equal(mob.x,480);
+ mob.x=905-mob.r;g.onBulletHit(mob,shot);assert.equal(mob.x,905-mob.r);
 });

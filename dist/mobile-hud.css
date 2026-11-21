@@ -88,10 +88,8 @@
  .touch-actions button[aria-disabled=true],.action-guide button[aria-disabled=true]{filter:saturate(.45) brightness(.82)}
  .touch-actions button.held,.action-guide button.held{transform:translateY(2px);box-shadow:0 1px 0 #0a1110,inset 0 2px 6px #00000055;filter:brightness(1.12)}
 
- /* Move stick: a floating stick inside a hit zone larger than its ring. */
- /* The ring rests at its usual spot; mobile-ui.js moves it under a thumb that lands anywhere
-    in the zone (offsets from the zone's left and bottom edges). */
- #stick{position:absolute;z-index:11;left:0;bottom:0;width:var(--stick-zone-w);height:var(--stick-zone-h);--ring-x:calc(var(--edge-l) + var(--stick-in));--ring-y:var(--ctl-b);--ring-left:max(var(--sa-l),var(--ring-x));--ring-bottom:max(var(--sa-b),var(--ring-y));border:0;border-radius:0;background:transparent;box-shadow:none;touch-action:none}
+ /* The fixed ring stays inside the safe area; its larger touch target stays available. */
+ #stick{position:absolute;z-index:11;left:0;bottom:0;width:var(--stick-zone-w);height:var(--stick-zone-h);--ring-left:max(var(--sa-l),calc(var(--edge-l) + var(--stick-in)));--ring-bottom:max(var(--sa-b),var(--ctl-b));border:0;border-radius:0;background:transparent;box-shadow:none;touch-action:none}
  #stick::before{content:'';position:absolute;box-sizing:border-box;left:var(--ring-left);bottom:var(--ring-bottom);width:var(--stick);height:var(--stick);border:2px solid #a8bf9b88;border-radius:50%;background:radial-gradient(circle,#ffffff14 0 34%,#ffffff08 35% 100%);box-shadow:inset 0 0 0 8px #0d151455,0 3px 0 #0a111066;pointer-events:none}
  #stick::after{content:'';position:absolute;box-sizing:border-box;left:calc(var(--ring-left) + 14px);bottom:calc(var(--ring-bottom) + 14px);width:calc(var(--stick) - 28px);height:calc(var(--stick) - 28px);border:1px dashed #c3d4b244;border-radius:50%;pointer-events:none}
  #stick span{position:absolute;z-index:1;width:46px;height:46px;left:calc(var(--ring-left) + var(--stick) / 2 - 23px);top:auto;bottom:calc(var(--ring-bottom) + var(--stick) / 2 - 23px);border:2px solid #1d2f27;border-radius:50%;background:radial-gradient(circle at 40% 35%,#dff0b8,#9dbb78 60%,#6f9157);box-shadow:0 3px 0 #0a1110;pointer-events:none}
