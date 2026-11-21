@@ -1,10 +1,8 @@
 import {atlasRegion} from './atlas-regions.js';
-import {loadArt} from './asset-url.js';
 import {selectedCostume,costumeById,costumeImage} from './costumes.js';
 import {COSTUME_REGIONS} from './costume-regions.js';
 import {FROG_JUMP_SECONDS} from './frog-jump.js';
-const sheet=typeof Image==='undefined'?null:new Image();
-if(sheet)loadArt(sheet,'naiwa-pixel-v2.png');
+costumeImage('original');
 const tinted=new Map();
 export function heroFrame(g){
  if(g.sandy?.left>0)return g.p.dash>0?13:(g.heroMoving?4+Math.floor((g.actionClock||0)*12)%4:8+Math.floor((g.actionClock||0)*12)%4);
@@ -17,7 +15,7 @@ export function heroFrame(g){
  return Math.floor(t*3)%4;
 }
 export function drawHero(c,g,x,y,size=1,ghost=false,style={}){
- const id=style.costumeId??selectedCostume(),costume=costumeById(id),candidate=id==='original'?sheet:costumeImage(id);
+ const id=style.costumeId??selectedCostume(),costume=costumeById(id),sheet=costumeImage('original'),candidate=id==='original'?sheet:costumeImage(id);
  const active=candidate?.complete&&candidate.naturalWidth?candidate:sheet;
  if(!active?.complete||!active.naturalWidth)return false;
  const file=active===sheet?'naiwa-pixel-v2.png':costume.file;

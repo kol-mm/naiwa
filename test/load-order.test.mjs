@@ -50,3 +50,22 @@ test('art waits while the title holds it, then loads in request order; other pag
  const open=await import('../dist/asset-url.js?open'),d={};open.loadArt(d,'mobs-milk-v1.png');
  assert.match(d.src,/mobs-milk-v1\.webp$/,'no document hold: immediate');
 });
+
+test('a failed WebP keeps the same atlas and waits for its PNG before declaring failure',async()=>{
+ const {loadArt,artLoaded}=await import('../dist/asset-url.js');
+ const image=loadArt({},'mobs-milk-v1.png');
+ const result=artLoaded(image);
+ assert.match(image.src,/mobs-milk-v1\.webp$/);
+ image.onerror();
+ assert.match(image.src,/mobs-milk-v1\.png$/);
+ assert.equal(image.assetName,'mobs-milk-v1.png');
+ image.onload();
+ assert.equal(await result,true);
+ const broken=loadArt({},'rooms-bright-v1.png');
+ broken.onerror();broken.onerror();
+ assert.equal(await artLoaded(broken),false);
+ assert.equal(broken.onerror,null,'both formats exhausted without a request loop');
+ const nativePng=loadArt({},'icon-192.png');
+ nativePng.onerror();
+ assert.equal(await artLoaded(nativePng),false);
+});
