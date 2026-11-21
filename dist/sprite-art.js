@@ -68,11 +68,24 @@ export function drawBrightRoom(c,room,floor){
 }
 // Decode the current chapter first so phones do not fetch every later boss at startup.
 export function prepareChapterArt(floor){
- const names=['rooms-bright-v1.png','mobs-milk-v1.png',floor<=4?'chapter-bosses-v1.png':'bull-actions-v2.png'];
+ const names=['rooms-bright-v1.png','mobs-milk-v1.png'];
  if(floor===3||floor===4)names.push('gunners-actions-v1.png');
  if(floor===2||floor===3)names.push('mobs-stage-v1.png');
  if(floor>=4)names.push('mobs-factory-v1.png');
- if(floor===5)names.push('meishu-actions-v1.png','family-rescue-v2.png');
+ if(floor===5)names.push('family-rescue-v2.png');
  for(const file of names)spriteImage(file);
+}
+// Boss sheets are the heaviest single files, so they wait until the boss room is close.
+// Floors 1-4 share one four-row sheet; the final floor uses the two-family sheets.
+export function prepareBossArt(floor){
+ const names=floor<=4?['chapter-bosses-v1.png']:['bull-actions-v2.png','meishu-actions-v1.png'];
+ for(const file of names)spriteImage(file);
+}
+// Two rooms of walking plus the door transition is enough headroom for the sheet on a slow phone.
+export function bossArtDue(rooms,roomId,roomType){
+ const boss=rooms?.find?.(r=>r.exists&&r.type==='boss');if(!boss)return false;
+ if(roomType==='boss')return true;
+ const rows=Math.abs(Math.floor(boss.id/5)-Math.floor(roomId/5)),cols=Math.abs(boss.id%5-roomId%5);
+ return rows+cols<=2;
 }
 prepareChapterArt(1);

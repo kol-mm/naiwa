@@ -18,6 +18,11 @@
 .help-modal .instructions{min-height:0;overflow:auto;overscroll-behavior:contain;margin:6px 0 0;padding:4px 10px 4px 2px;text-align:left;touch-action:pan-y;border-top:2px dotted #d3c393;border-bottom:2px dotted #d3c393;font-size:13px;line-height:1.85}
 .help-modal .instructions b{color:var(--leaf-dark);font-weight:900}
 .help-modal>h2,.help-modal>.mini,.help-modal>.primary,.help-modal>.creator-links{flex-shrink:0}
+.help-scroll-hint{display:none}
+.help-modal[data-scroll=more] .instructions{-webkit-mask-image:linear-gradient(#000 calc(100% - 16px),transparent);mask-image:linear-gradient(#000 calc(100% - 16px),transparent);scrollbar-width:thin;scrollbar-color:#b9a978 transparent}
+.help-modal[data-scroll=more] .help-scroll-hint{display:block;position:absolute;z-index:2;right:14px;top:12px;padding:1px 6px;border:1px solid #b9a978;border-radius:4px;background:#fffaf0e6;color:#7b6a45;font-size:10px;font-weight:700;line-height:1.4;pointer-events:none}
 @media(pointer:coarse){.creator-links button,.creator-links a{min-height:44px;display:inline-flex;align-items:center}.creator-links{margin-top:2px}}
 @media(max-height:450px){.creator-dialog{padding:10px 14px}.creator-dialog .creator-close{margin-bottom:4px}.creator-body{gap:16px}.creator-info h2{font-size:22px;margin:3px 0}.creator-info p{font-size:12px;margin:5px 0}.creator-info label{margin-top:6px}.creator-info input{font-size:17px;padding:4px 0}.creator-actions{margin-top:6px;gap:6px}.creator-image img{max-height:calc(100dvh - 84px)}.creator-info .creator-hint{font-size:11px;line-height:1.4}}
 @media(max-width:480px) and (orientation:portrait){.creator-body{grid-template-columns:1fr;gap:12px}.creator-image img{max-height:48dvh}.creator-info h2{font-size:24px}}
+
+@media(max-height:420px){.help-modal{padding:12px 14px}.help-modal>.mini{display:none}.help-modal h2{font-size:19px;margin:2px 0 4px}.help-modal .instructions{font-size:11px;line-height:1.6;margin-top:2px}.help-modal>.primary{min-height:40px;margin-top:4px;padding:7px 18px;font-size:14px}.help-modal>.creator-links{font-size:11px;margin-top:2px}}

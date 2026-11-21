@@ -2,18 +2,19 @@ import {prepareGameCanvas} from './canvas-compat.js';
 
 // Gameplay stays in 960 × 600 coordinates. Only the drawing buffer follows the
 // display density, with a 1920 × 1200 ceiling for mobile memory and fill rate.
-export function gameRenderSize(cssWidth,cssHeight,dpr=1){
+export function gameRenderSize(cssWidth,cssHeight,dpr=1,maxScale=2){
  const density=Number.isFinite(dpr)&&dpr>0?dpr:1;
  const width=Number.isFinite(cssWidth)&&cssWidth>0?cssWidth:960;
  const height=Number.isFinite(cssHeight)&&cssHeight>0?cssHeight:600;
- const scale=Math.max(1,Math.min(2,Math.max(width/960,height/600)*density));
+ const cap=Number.isFinite(maxScale)&&maxScale>0?Math.min(2,maxScale):2;
+ const scale=Math.max(1,Math.min(cap,Math.max(width/960,height/600)*density));
  const units=Math.min(120,Math.ceil(60*scale));
  return {width:units*16,height:units*10,scale:units/60};
 }
 
-export function createGameRenderer(canvas,view=window){
+export function createGameRenderer(canvas,view=window,{maxScale=2}={}){
  const context=prepareGameCanvas(canvas.getContext('2d'));
- let dirty=true,lastDpr,size;
+ let dirty=true,lastDpr,size,cap=Number.isFinite(maxScale)&&maxScale>0?Math.min(2,maxScale):2;
  const invalidate=()=>{dirty=true};
  view.addEventListener?.('resize',invalidate);
  view.visualViewport?.addEventListener?.('resize',invalidate);
@@ -26,7 +27,7 @@ export function createGameRenderer(canvas,view=window){
    if(dirty||dpr!==lastDpr){
     // client size is before the portrait-page CSS rotation; boundingClientRect
     // would swap the axes and select the wrong resolution on those phones.
-    size=gameRenderSize(canvas.clientWidth,canvas.clientHeight,dpr);
+    size=gameRenderSize(canvas.clientWidth,canvas.clientHeight,dpr,cap);
     if(canvas.width!==size.width||canvas.height!==size.height){canvas.width=size.width;canvas.height=size.height}
     dirty=false;lastDpr=dpr;
    }
@@ -34,6 +35,7 @@ export function createGameRenderer(canvas,view=window){
    context.imageSmoothingEnabled=false;
    context.clearRect(0,0,960,600);
   },
+  setMaxScale(value){const next=Number.isFinite(value)&&value>0?Math.min(2,value):2;if(next!==cap){cap=next;dirty=true}},
   dispose(){observer?.disconnect();view.removeEventListener?.('resize',invalidate);view.visualViewport?.removeEventListener?.('resize',invalidate)}
  };
 }

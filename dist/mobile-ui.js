@@ -142,4 +142,5 @@ export function setupMobileUI({suspend,resume,resetInput,pause,notify,canOpenMap
  for(const type of ['selectstart','contextmenu','dragstart'])document.querySelector('.game-column').addEventListener(type,e=>e.preventDefault());
  document.querySelector('#game').addEventListener('pointerdown',e=>e.preventDefault());
  viewport=installMobileViewport({media,resetInput});
+ return {closePanels(){if(!menu.hidden)closeMenu();else if(aside.dataset.openPanel)close()},isOpen(){return !menu.hidden||!!aside.dataset.openPanel}};
 }

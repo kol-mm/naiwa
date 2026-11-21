@@ -24,7 +24,7 @@
   --stick:calc(var(--stick-base) * var(--keff));--fire:calc(var(--fire-base) * var(--keff));--dash:calc(var(--dash-base) * var(--keff));--laugh-w:calc(var(--laugh-w-base) * var(--keff));--laugh-h:calc(var(--laugh-h-base) * var(--keff));
   --rail-gap:10px;--room-pad:8px;
   --rail-l:max(104px,calc(var(--stick) + var(--stick-in) - 2px));
-  --rail-r:calc(var(--fire-in) + var(--fire) + 4px - var(--rail-gap));
+  --rail-r:calc(var(--fire-in) + var(--fire) + var(--slop) + 4px - var(--rail-gap));
   --ctl-b:calc(var(--edge-b) + min(var(--lift),var(--lift-max)));
   /* Thumb rest: the attack cross and the buttons above it rise off the bottom corner by up
      to --rest-max, but only into the space left below the pause button / room label. */
@@ -260,4 +260,16 @@
 @media (max-width:780px),(pointer:coarse),(max-width:1100px) and (max-height:600px){
  aside[data-open-panel=inventory] .inventory{grid-template-columns:repeat(2,minmax(0,1fr))}
  aside[data-open-panel=stats] .stats-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
+/* Short screens: the opening tip should not eat a quarter of the room. */
+@media (max-height:420px){
+ .toast{max-width:92%;padding:5px 9px;font-size:11px;line-height:1.35;bottom:6px}
+}
+
+/* Wide touch screens have room outside the arena: shift the attack hitbox toward the
+   screen edge instead of taking that width away from the room. */
+@media (min-width:700px) and (min-height:700px) and (pointer:coarse){
+ .game-column{--rail-r:calc(var(--fire-in) + var(--fire) + 4px - var(--rail-gap))}
+ #touchFire{right:calc(var(--edge-r) + var(--fire-in) - var(--slop) - var(--slop))}
 }

@@ -78,3 +78,11 @@ test('bad or newer saves and storage errors are recoverable and cannot overwrite
  assert.equal(createRunStore({getItem(){throw Error('disabled')}}).read().status,'error');
  const polluted=JSON.parse(good);polluted.graph.nodes[0].data.push(['__proto__',{ref:0}]);assert.throws(()=>deserializeRun(JSON.stringify(polluted)));assert.equal({}.polluted,undefined);
 });
+
+test('missing storage fails closed instead of reporting a phantom save',()=>{
+ const store=createRunStore(null);
+ const read=store.read();
+ assert.equal(read.status,'error');
+ assert.equal(read.storageBlocked,true);
+ assert.equal(store.write(fresh()),false,'no-op storage must not claim the run was saved');
+});
