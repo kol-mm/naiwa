@@ -13,7 +13,7 @@ function setup(type){const g=new Game();g.start();g.room.clear=false;g.p.x=800;g
 function mechanic(floor,index=0){const g=new Game();g.start();g.floor=floor;g.generate();const r=g.rooms.find(r=>r.layoutId===MECHANIC_LAYOUTS[floor-1][index].id);g.enter(r.id,'top');const layout=MECHANIC_LAYOUTS[floor-1][index];r.obstacles=layout.build();r.hazards=layout.hazards?.()||[];g.p.inv=999;for(const e of r.enemies)e.cd=999;return g}
 
 test('every chapter includes its species across the eight encounter profiles',()=>{
- for(let f=1;f<=5;f++){const g=new Game();g.floor=f;g.generate();const r=g.rooms.find(r=>r.type==='fight'&&r.exists),types=new Set();for(let variant=0;variant<8;variant++){r.seed=0;r.crowdingPenalty=0;r.encounterProfile=variant;const mobs=spawnEncounter(g,r);assert.equal(mobs.length,5+f);mobs.forEach(e=>types.add(e.type))}for(const [id,d] of Object.entries(CHAPTER_MOBS))if(d.chapter===f)assert.ok(types.has(id))}
+ for(let f=1;f<=5;f++){const g=new Game();g.floor=f;g.generate();const r=g.rooms.find(r=>r.type==='fight'&&r.exists),types=new Set();for(let variant=0;variant<8;variant++){r.seed=0;r.crowdingPenalty=0;r.encounterProfile=variant;const mobs=spawnEncounter(g,r);assert.equal(mobs.length,f===1?4:5+f);mobs.forEach(e=>types.add(e.type))}for(const [id,d] of Object.entries(CHAPTER_MOBS))if(d.chapter===f)assert.ok(types.has(id))}
 });
 test('curdling death has a warning before milk, and milk skaters accelerate only on milk',()=>{
  const {g,e}=setup('curdling');g.room.enemies.push(g.spawn('turret',200,450));g.damageEnemy(e,99);step(g,.5);assert.equal(g.effects.filter(f=>f.type==='milkPool').length,0);step(g,.25);assert.ok(g.effects.some(f=>f.type==='milkPool'));

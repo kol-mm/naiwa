@@ -4,6 +4,25 @@ import {Game,ITEMS} from '../dist/engine.js';
 import {createStatsPanel} from '../dist/stats.js';
 import {Game as CampaignGame,ITEMS as CATALOG} from '../dist/campaign.js';
 
+test('optional ability rows become visible on pickup and fold again on a fresh run',()=>{
+ const optional=['shield','laugh','groundguard','button'];
+ const keys=['state','health','damage','rate','speed','shots','dash','effects',...optional];
+ const fields=keys.map(key=>({dataset:{stat:key},textContent:''}));
+ const rows=optional.map(key=>({dataset:{optionalStat:key},unowned:false,toggleAttribute(name,value){
+  assert.equal(name,'data-unowned');this.unowned=value;
+ }}));
+ const panel={
+  querySelectorAll:selector=>selector==='[data-stat]'?fields:rows,
+  querySelector:()=>({value:0})
+ };
+ const update=createStatsPanel(panel),g=new CampaignGame(()=>.42);g.start();
+ update(g);assert.ok(rows.every(row=>row.unowned));
+ g.items=['lotus','laugh','milkboots','sparebutton'];g.p.shield=true;
+ update(g);assert.ok(rows.every(row=>!row.unowned));
+ g.p.shield=false;g.p.shieldCD=5;update(g);assert.equal(rows[0].unowned,false);
+ const fresh=new CampaignGame(()=>.42);fresh.start();update(fresh);assert.ok(rows.every(row=>row.unowned));
+});
+
 test('all 74 item damage readouts and compact rail mirror the actual central shot; shield changes stay live',()=>{
  const fields=Object.fromEntries(['state','health','damage','rate','speed','shots','shield','dash','laugh','effects'].map(key=>[key,{dataset:{stat:key},textContent:''}]));
  const compact=['damage','rate','speed','shield'].map(key=>({dataset:{compactStat:key},textContent:''}));

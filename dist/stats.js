@@ -9,10 +9,16 @@ import {playerAttackDamage} from './player-damage.js';
 export function createStatsPanel(panel,compact=null) {
   const compactFields=compact?[...compact.querySelectorAll('[data-compact-stat]')]:[];
   const fields = Object.fromEntries([...panel.querySelectorAll('[data-stat]')].map(el => [el.dataset.stat, el]));
+  const optionalRows = new Map([...panel.querySelectorAll('[data-optional-stat]')].map(row => [row.dataset.optionalStat, row]));
   // Alternating the attribute restarts a short CSS highlight whenever a core stat changes.
   const flashed = new Set(['health','damage','rate','speed','shots']);
   const flash = el => { if (el.dataset) el.dataset.flash = el.dataset.flash === 'a' ? 'b' : 'a'; };
-  const set = (key, value) => { if (fields[key].textContent !== value) { fields[key].textContent = value; if (flashed.has(key)) flash(fields[key]); } };
+  const set = (key, value) => {
+    if (fields[key].textContent === value) return;
+    fields[key].textContent = value;
+    optionalRows.get(key)?.toggleAttribute('data-unowned', value === '未获得');
+    if (flashed.has(key)) flash(fields[key]);
+  };
   const remaining = seconds => `${Math.max(.1, Math.ceil(seconds * 10) / 10).toFixed(1)} 秒`;
   return game => {
     const p = game.p,voice=voiceStats(game);

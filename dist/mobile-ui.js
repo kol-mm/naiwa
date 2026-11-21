@@ -1,6 +1,6 @@
 import {toggleGameFullscreen,canGoFullscreen,consumeFullscreenTurn} from './fullscreen.js';
 import {MOBILE_QUERY,installMobileViewport} from './mobile-viewport.js';
-import {flipDirection,toVirtualPoint,toVirtualDelta,virtualRect,viewportMedia} from './rotate-view.js';
+import {flipDirection,toVirtualDelta,virtualRect,viewportMedia} from './rotate-view.js';
 export function bindHoldControl(element,press,release,{move=()=>{}}={}){
  let pointer=null;const doc=element.ownerDocument,view=doc?.defaultView,seen=new WeakSet();
  element.addEventListener('pointerdown',e=>{if(pointer!==null||e.button!==0)return;e.preventDefault();pointer=e.pointerId;try{element.setPointerCapture?.(pointer)}catch{}element.classList?.add('held');press(e)});
@@ -16,46 +16,28 @@ export function bindHoldControl(element,press,release,{move=()=>{}}={}){
  element.addEventListener('contextmenu',e=>e.preventDefault());
  return reset;
 }
-// Use the point where the finger landed as neutral, so touching off-centre never jumps.
+// Map distance from the stick's centre to an analogue movement vector.
 export function stickVector(dx,dy,radius,deadZone=7){
  const length=Math.hypot(dx,dy);
  if(length<=deadZone)return {x:0,y:0};
  const strength=Math.min(1,(length-deadZone)/Math.max(1,radius-deadZone));
  return {x:dx/length*strength,y:dy/length*strength};
 }
-// The move stick is a thumb zone. Its ring rests at the usual spot and jumps under the
-// finger where it lands. The zone's left and bottom are the screen edges, so only those
-// push the ring back; it may cross the zone's inner edges. Offsets are from the zone's
-// left and bottom edges, in the page's own (possibly sideways) axes.
-export function ringPlacement(zone,size,point){
- const half=size/2,cx=Math.max(point.x-zone.left,half),cy=Math.min(point.y-zone.top,zone.height-half);
- return {left:cx-half,bottom:zone.height-cy-half};
-}
 export function bindStickControl(element,change,{deadZone=7}={}){
- let origin=null,radius=0;
- const ring=element.querySelector?.('em')||null,style=element.style,view=element.ownerDocument?.defaultView;
- function place(){
-  if(!origin||!ring||!style?.setProperty)return;
-  const at=ringPlacement(virtualRect(element),virtualRect(ring).width,toVirtualPoint(origin.x,origin.y));
-  style.setProperty('--ring-x',at.left+'px');style.setProperty('--ring-y',at.bottom+'px');
- }
- const rest=()=>{style?.removeProperty?.('--ring-x');style?.removeProperty?.('--ring-y')};
- // Keep the neutral point on the physical screen when browser bars resize a sideways page.
- // Reposition the artwork after layout. The held finger's movement uses only its own delta.
- if(view?.ResizeObserver&&ring){
-  const observer=new view.ResizeObserver(place);observer.observe(element);observer.observe(ring);
- }else if(view?.requestAnimationFrame){
-  const afterLayout=()=>view.requestAnimationFrame(()=>view.requestAnimationFrame(place));
-  view.addEventListener('resize',afterLayout);view.visualViewport?.addEventListener('resize',afterLayout);
+ const ring=element.querySelector?.('em');
+ let center=null,radius=0;
+ function update(e){
+  const delta=toVirtualDelta(e.clientX-center.x,e.clientY-center.y);
+  change(stickVector(delta.x,delta.y,radius,deadZone),true);
  }
  return bindHoldControl(element,e=>{
-  origin={x:e.clientX,y:e.clientY};radius=(ring?virtualRect(ring).width+12:virtualRect(element).width)*.32;
-  place();change({x:0,y:0},true);
- },()=>{origin=null;rest();change({x:0,y:0},false)},{move:e=>{
-  if(!origin)return;
-  const delta=toVirtualDelta(e.clientX-origin.x,e.clientY-origin.y);
-  change(stickVector(delta.x,delta.y,radius,deadZone),true);
- }});
+  // Use the visible ring, not the larger touch target. Keep the same physical
+  // centre until release if the browser's address bar changes the layout.
+  const rect=(ring||element).getBoundingClientRect();
+  center={x:rect.left+rect.width/2,y:rect.top+rect.height/2};
+  radius=(rect.width+(ring?12:0))*.32;
+  update(e);
+ },()=>{center=null;change({x:0,y:0},false)},{move:update});
 }
 // Consumables use a one-frame pulse, never a held key or a delayed action after a menu.
 export function createTouchActions(){

@@ -45,6 +45,17 @@ const soundMix=new SoundMixer(),createAudio=url=>soundMix.createAudio(url),creat
 soundMix.setVolume(prefs.volume);
 const bossVoice=new BossAudio({createAudio:createVoiceAudio}),bossDemo=new URLSearchParams(location.search).get('boss-demo')==='1';const voice=new GameAudio({createAudio:createVoiceAudio,onError:()=>toast('大笑音效暂未就绪，请再次点击操作键。')});const itemVoice=new ItemAudio({createAudio:createVoiceAudio,canPlay:key=>game.mode==='play'&&ownsItemVoice(game,key),isBusy:()=>!!bossVoice.current||voice.playing});const syncRoomVoices=createRoomVoiceBoundary({bossVoice,itemVoice});let pauseMode='play';const panelResume=createPanelResumeState();
 const updateStats = createStatsPanel($('.stats-panel'),$('#mobileStats'));
+$('#showUnownedStats').addEventListener('change',event=>{
+ $('.stats-panel').classList.toggle('show-unowned',event.currentTarget.checked);
+});
+for(const button of document.querySelectorAll('[data-fold-panel]')){
+ button.addEventListener('click',()=>{
+  const folded=button.closest('section').classList.toggle('side-collapsed');
+  button.textContent=folded?'展开':'收起';
+  button.setAttribute('aria-label',button.textContent+button.dataset.foldPanel);
+  button.setAttribute('aria-expanded',String(!folded));
+ });
+}
 let game=new Game(),keys=new Set(),mouse={x:700,y:300,down:false},mouseAimActive=false,move={x:0,y:0},touchFire=false,touchAim={x:0,y:0},last=0,sound=true,shake=0,toastTimer,oldMode='play',best=0,mobileUI=null;
 try{sound=storage?.getItem('naiwa-sound')!=='false'}catch{}
 voice.setEnabled(sound);bossVoice.setEnabled(sound);itemVoice.setEnabled(sound);soundMix.setEnabled(sound);

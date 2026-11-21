@@ -20,7 +20,7 @@ import {installResourceRooms,enterResourceRoom,claimResourceRoom,updateResourceR
 import {hitDevice,updateDevices,blastDevices} from './chapter-mechanics.js';
 import {CHAPTER_MOBS,mobSpeed,mobAttack,updateMobs,mobKilled,mobContact} from './chapter-mobs.js';
 import {STATIONARY,specialAttack,updateActors,updateGround,updateActive,movementScale,groundDrift,onMilk,milkPool,killedSpecial} from './combat-content.js';
-import {installLayouts,overlaps,safeSpot,steer,moveOnTerrain,terrainProjectile,blastTerrain,spawnEncounter} from './terrain.js';
+import {installLayouts,overlaps,blocked,safeSpot,steer,moveOnTerrain,terrainProjectile,blastTerrain,spawnEncounter} from './terrain.js';
 import {Game as Base,ITEMS,W,H} from './engine.js';
 import {startSpeakerAttack,updateSpeaker} from './speaker.js';
 export {ITEMS,W,H};
@@ -114,7 +114,18 @@ export class Game extends Base{
  activeCost(){return Math.max(25,(this.has('battery')?30:45)-(this.has('quietbadge')?10:0))}
  damageEnemy(e,n,credit=true){const before=Math.max(0,e.hp);super.damageEnemy(e,n*ghostDamageScale(this,e)*(e.kind==='catcher'&&e.handDisabled>0?1.5:1));const dealt=Math.max(0,before-Math.max(0,e.hp));if(credit)mendGear(this,dealt);if(credit&&!this.releasingLaugh&&dealt>0)this.activeCharge=Math.min(this.activeCost(),(this.activeCharge||0)+dealt)}
  bulletDamage(e,b){return b.damage*(!b.pet&&this.has('starbadge')&&e.starMark>0?1.2:1)}
- onBulletHit(e,b){hitItemVfx(this,e,b);if(b.rollingRock){if(b.hits.size>=3)b.life=0;if(e.type!=='boss'){const a=Math.atan2(b.vy,b.vx);e.vx=Math.cos(a)*180;e.vy=Math.sin(a)*180;e.repelled=.2}}hitVoice(this,e,b);hitGear(this,e,b);hitMeme(this,e,b);hitDeepseek(this,e,b);if(!b.pet&&this.has('milkfoam')&&this.random()<.2)milkPool(this,e.x,e.y,true,48,3);if(!b.split)return;b.split=false;for(const sign of [-1,1]){const a=Math.atan2(b.vy,b.vx)+sign*.7;this.bullets.push({...b,vx:Math.cos(a)*420,vy:Math.sin(a)*420,damage:b.damage*.35,r:5,life:.6,shotSpeed:420,age:0,returnAfter:.25,returned:b.returned,returning:false,hits:new Set(b.hits),split:false})}}
+ nudgeOnShot(enemy,shot){
+  if(shot.pet||shot.rollingRock||enemy.dead||enemy.airborne||enemy.dummy||enemy.type==='boss'||STATIONARY.has(enemy.type))return;
+  const speed=Math.hypot(shot.vx,shot.vy);
+  if(!(speed>0)||this.elapsed<(enemy.nextShotNudge??0))return;
+  const x=enemy.x+4*shot.vx/speed,y=enemy.y+4*shot.vy/speed;
+  if(x<55+enemy.r||x>905-enemy.r||y<55+enemy.r||y>545-enemy.r)return;
+  if(blocked(this.room,x,y,enemy.r,enemy.type==='hopper'))return;
+  enemy.x=x;enemy.y=y;
+  // A volley gets one small step without adding stun or replacing item knockback.
+  enemy.nextShotNudge=this.elapsed+.16;
+ }
+ onBulletHit(e,b){hitItemVfx(this,e,b);this.nudgeOnShot(e,b);if(b.rollingRock){if(b.hits.size>=3)b.life=0;if(e.type!=='boss'){const a=Math.atan2(b.vy,b.vx);e.vx=Math.cos(a)*180;e.vy=Math.sin(a)*180;e.repelled=.2}}hitVoice(this,e,b);hitGear(this,e,b);hitMeme(this,e,b);hitDeepseek(this,e,b);if(!b.pet&&this.has('milkfoam')&&this.random()<.2)milkPool(this,e.x,e.y,true,48,3);if(!b.split)return;b.split=false;for(const sign of [-1,1]){const a=Math.atan2(b.vy,b.vx)+sign*.7;this.bullets.push({...b,vx:Math.cos(a)*420,vy:Math.sin(a)*420,damage:b.damage*.35,r:5,life:.6,shotSpeed:420,age:0,returnAfter:.25,returned:b.returned,returning:false,hits:new Set(b.hits),split:false})}}
  canClearRoom(r){return !(r.type==='cache'&&r.dangerTime>0)}
  onRoomCleared(r){
   if(r.clearRewarded)return;clearMeme(this,r);resetChronoRoom(this);r.clearRewarded=true;clearGear(this,r);clearDeepseek(this,r);clearPhoebe(this);this.shrimpMeals=[];claimResourceRoom(this);
