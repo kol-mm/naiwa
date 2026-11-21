@@ -4,13 +4,28 @@ import {Game} from '../dist/campaign.js';
 import {EXCHANGES,roomSides} from '../dist/resource-scenes.js';
 import {createPurchaseSelection} from '../dist/purchase-ui.js';
 const snapshot=g=>({coins:g.coins,keys:g.keys,bombs:g.bombs,hp:g.p.hp,items:[...g.items]});
-function revisitThroughDoors(g){
- const home=g.roomId,door=roomSides(g).find(d=>{const r=g.rooms[d.id];return r?.exists&&!r.locked&&!r.bombLocked&&!r.hidden});assert.ok(door);
+function openDoor(g){return roomSides(g).find(d=>{const r=g.rooms[d.id];return r?.exists&&!r.locked&&!r.bombLocked&&!r.hidden})}
+function revisitThroughDoors(g,door=openDoor(g)){
+ const home=g.roomId;assert.ok(door);
  const next=g.rooms[door.id];next.clear=true;next.enemies=[];g.pickup=null;g.p.x=door.x;g.p.y=door.y;g.update(.02);assert.equal(g.roomId,next.id);
+ // First entry into a treasure room opens its reward choice. Leave it on the ground before walking back.
+ if(next.type==='treasure'&&g.mode==='choice')g.leaveChoice();
  const back=roomSides(g).find(d=>d.id===home);g.pickup=null;g.p.x=back.x;g.p.y=back.y;g.update(.02);assert.equal(g.roomId,home);
  g.p.x=480;g.p.y=260;
 }
 function init(floor=1){const g=new Game();g.start();g.floor=floor;g.generate();g.keys=g.bombs=g.coins=100;g.p.hp=g.p.maxHp=100;return g}
+test('a shop revisit through a treasure room leaves its offered item for later',()=>{
+ const g=init();
+ const shop=g.rooms.find(room=>room.exists&&room.type==='shop');
+ g.enter(shop.id,'top');
+ const door=openDoor(g),treasure=g.rooms[door.id];
+ Object.assign(treasure,{type:'treasure',reward:false});
+ const before=snapshot(g);
+ revisitThroughDoors(g,door);
+ assert.equal(g.mode,'play');
+ assert.equal(treasure.pendingItem,true);
+ assert.deepEqual(snapshot(g),before);
+});
 test('all five floors retain every exchange quota through real doorway transitions and repeated confirmations',()=>{
  for(let floor=1;floor<=5;floor++){
   const g=init(floor);
