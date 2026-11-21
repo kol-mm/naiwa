@@ -37,8 +37,9 @@ $dex = Join-Path $work 'dex'
 foreach ($dir in $assets, $classes, $dex) { [IO.Directory]::CreateDirectory($dir) | Out-Null }
 $game = Join-Path $assets 'game'
 $dist = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../dist')).Path
+$fallbackArt = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'fallback-art.txt')
 foreach ($source in (Get-ChildItem -LiteralPath $dist -Recurse -File)) {
-    if ($source.Extension -eq '.png' -and (Test-Path -LiteralPath ([IO.Path]::ChangeExtension($source.FullName, '.webp')))) { continue }
+    if ($source.Extension -eq '.png' -and $source.Name -notin $fallbackArt -and (Test-Path -LiteralPath ([IO.Path]::ChangeExtension($source.FullName, '.webp')))) { continue }
     $dest = Join-Path $game ([IO.Path]::GetRelativePath($dist, $source.FullName))
     [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($dest)) | Out-Null
     [IO.File]::Copy($source.FullName, $dest)

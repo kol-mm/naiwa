@@ -10,16 +10,32 @@ export function assetUrl(file){return new URL('./assets/'+assetFile(file),import
 export function assetPath(file){return 'assets/'+assetFile(file)}
 let held=null,release=null;
 const queue=[],ready=new Promise(resolve=>{release=resolve});
+const imageResults=new WeakMap();
 function holding(){
  if(held===null)held=typeof document!=='undefined'&&!!document.documentElement?.hasAttribute?.('data-art-hold');
  return held;
 }
 // Starts (or queues) an image download. The name is kept for atlas lookups, since the URL may be .webp.
 export function loadArt(image,file){
- image.assetName=file;const url=assetUrl(file);
- if(holding())queue.push(()=>{image.src=url});else image.src=url;
+ image.assetName=file;
+ const url=assetUrl(file);
+ const source=WEBP.has(file)?new URL('./assets/'+file,import.meta.url).href:null;
+ imageResults.set(image,new Promise(resolve=>{
+  let canFallback=source!==null;
+  function finish(ok){image.onload=null;image.onerror=null;resolve(ok)}
+  image.onload=()=>finish(true);
+  image.onerror=()=>{
+   if(!canFallback){finish(false);return}
+   canFallback=false;
+   image.src=source;
+  };
+  const start=()=>{image.src=url};
+  if(holding())queue.push(start);else start();
+ }));
  return image;
 }
+// Callers waiting for the sprite see the final result of both formats.
+export function artLoaded(image){return imageResults.get(image)??Promise.resolve(false)}
 export function artReady(){return holding()?ready:Promise.resolve()}
 export function artHeld(){return holding()}
 export function releaseArt(){

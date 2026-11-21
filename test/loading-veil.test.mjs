@@ -44,3 +44,22 @@ test('a missing veil node never freezes the frame loop',()=>{
  assert.equal(veil.isBlocking(),false);
  veil.show();assert.equal(veil.isBlocking(),false);
 });
+
+test('a stale atlas cannot uncover another chapter, and a stalled request has a deadline',async()=>{
+ globalThis.document={documentElement:{setAttribute(){},removeAttribute(){}}};
+ const veil=createLoadingVeil(fakeNode(),{minShow:1,fade:1,maxWait:90});
+ let firstReady,nextReady;
+ veil.hide('first',new Promise(resolve=>{firstReady=resolve}));
+ veil.show('next');
+ veil.hide('next ready',new Promise(resolve=>{nextReady=resolve}));
+ firstReady();
+ await sleep(15);
+ assert.equal(veil.isBlocking(),true);
+ nextReady();
+ await sleep(20);
+ assert.equal(veil.isBlocking(),false);
+ veil.show('slow');
+ veil.hide('slow ready',new Promise(()=>{}));
+ await sleep(130);
+ assert.equal(veil.isBlocking(),false);
+});
