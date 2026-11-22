@@ -1,5 +1,6 @@
 import {atlasRegion} from './atlas-regions.js';
 import {frameArt,loadArt} from './asset-url.js';
+import {drawableArt} from './scene-art.js';
 export const MOB_SHEETS=[
  ['mobs-milk-v1.png',['brute','hopper','shooter','runner','milkleak','milkspitter','curdling','milkSkater']],
  ['mobs-stage-v1.png',['soundTurret','beatling','echoBell','conductor','loader','parcelThrower','forklift','turret']],
@@ -8,7 +9,14 @@ export const MOB_SHEETS=[
 const images=new Map();
 export const cachedSpriteImage=file=>images.get(file);
 const bounds=new Map();
-export function spriteRegion(image,cols,rows,row,col){return atlasRegion(image.assetName||image.src.split('/').at(-1),cols,rows,row,col,image.naturalWidth,image.naturalHeight)}
+export function spriteRegion(image,cols,rows,row,col){
+ const width=image.atlasWidth??image.naturalWidth,height=image.atlasHeight??image.naturalHeight;
+ const rect=atlasRegion(image.assetName||image.src.split('/').at(-1),cols,rows,row,col,width,height);
+ if(!image.atlasWidth)return rect;
+ const sx=image.naturalWidth/width,sy=image.naturalHeight/height;
+ const left=Math.round(rect.left*sx),top=Math.round(rect.top*sy);
+ return {left,top,w:Math.round((rect.left+rect.w)*sx)-left,h:Math.round((rect.top+rect.h)*sy)-top};
+}
 // Crop transparent gutters without stretching, with one stable scale for the animation row.
 function rowBounds(image,cols,rows,row){
  const key=image.src+':'+cols+':'+rows+':'+row;if(bounds.has(key))return bounds.get(key);
@@ -27,7 +35,7 @@ export function spriteImage(file){
  return frameArt(images.get(file));
 }
 export function drawSprite(c,file,col,row,cols,rows,x,y,size,{flip=false,alpha=1,angle=0,squash=1}={}){
- const image=spriteImage(file);if(!image?.complete||!image.naturalWidth)return false;
+ const image=drawableArt(spriteImage(file));if(!image)return false;
  const region=spriteRegion(image,cols,rows,row,col),set=rowBounds(image,cols,rows,row),b=set.frames[col],scale=size/set.extent,dw=b.w*scale,dh=b.h*scale;
  c.save();c.imageSmoothingEnabled=false;c.translate(Math.round(x),Math.round(y));c.rotate(angle);c.scale(flip?-1:1,squash);c.globalAlpha*=alpha;
  c.drawImage(image,region.left+b.x,region.top+b.y,b.w,b.h,-dw/2,size*.23-dh,dw,dh);c.restore();return true;
@@ -68,7 +76,7 @@ export function drawAnimatedEnemy(c,e,t){
 }
 export function drawFamily(c,who,frame,x,y,size){return drawSprite(c,'family-rescue-v2.png',frame,who==='child'?0:1,4,2,x,y,size)}
 export function drawBrightRoom(c,room,floor){
- const image=spriteImage('rooms-bright-v1.png');if(!image?.complete||!image.naturalWidth)return false;
+ const image=drawableArt(spriteImage('rooms-bright-v1.png'));if(!image)return false;
  const cell=room.type==='start'?5:floor-1,w=image.naturalWidth/3,h=image.naturalHeight/2,ox=cell%3*w,oy=Math.floor(cell/3)*h;
  // Nine-slice keeps decoration on the outer walls instead of covering navigable ground.
  const sx=[0,w*.085,w*.915,w],sy=[0,h*.25,h*.94,h],dx=[0,47,913,960],dy=[0,47,553,600];
