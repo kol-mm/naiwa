@@ -1,5 +1,5 @@
 import {atlasRegion} from './atlas-regions.js';
-import {loadArt} from './asset-url.js';
+import {frameArt,loadArt} from './asset-url.js';
 export const MOB_SHEETS=[
  ['mobs-milk-v1.png',['brute','hopper','shooter','runner','milkleak','milkspitter','curdling','milkSkater']],
  ['mobs-stage-v1.png',['soundTurret','beatling','echoBell','conductor','loader','parcelThrower','forklift','turret']],
@@ -21,7 +21,11 @@ function rowBounds(image,cols,rows,row){
  }
  const result={frames,extent:Math.max(...frames.flatMap(b=>[b.w,b.h]))};bounds.set(key,result);return result;
 }
-export function spriteImage(file){if(typeof Image==='undefined')return null;if(!images.has(file)){const img=loadArt(new Image(),file);images.set(file,img)}return images.get(file)}
+export function spriteImage(file){
+ if(typeof Image==='undefined')return null;
+ if(!images.has(file))images.set(file,loadArt(new Image(),file));
+ return frameArt(images.get(file));
+}
 export function drawSprite(c,file,col,row,cols,rows,x,y,size,{flip=false,alpha=1,angle=0,squash=1}={}){
  const image=spriteImage(file);if(!image?.complete||!image.naturalWidth)return false;
  const region=spriteRegion(image,cols,rows,row,col),set=rowBounds(image,cols,rows,row),b=set.frames[col],scale=size/set.extent,dw=b.w*scale,dh=b.h*scale;

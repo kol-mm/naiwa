@@ -112,3 +112,37 @@ test('old WebViews and already drawable images can proceed if explicit decoding 
  const broken=loadArt({},'rooms-bright-v1.png'),failed=preloadArt(broken);
  broken.onerror();broken.onerror();assert.equal(await failed,false);assert.equal(artDecoded(broken),false);
 });
+
+test('retry keeps the same atlas, disregards a superseded decode and bypasses a cached failure',async()=>{
+ const {loadArt,artDecoded,preloadArt,retryArt}=await import('../dist/asset-url.js?retry');
+ let decoded;
+ const image=loadArt({decode:()=>new Promise(resolve=>{decoded=resolve})},'rooms-bright-v1.png');
+ const first=preloadArt(image);
+ image.onload();await Promise.resolve();
+ const second=retryArt(image);
+ decoded();assert.equal(await first,false);assert.equal(artDecoded(image),false);
+ assert.match(image.src,/\.webp\?retry=1$/);
+ image.onerror();assert.match(image.src,/\.png\?retry=1$/);
+ image.onerror();assert.equal(await second,false);
+ const third=retryArt(image);
+ assert.match(image.src,/\.webp\?retry=2$/);
+ image.onload();await Promise.resolve();decoded();
+ assert.equal(await third,true);assert.equal(artDecoded(image),true);
+ assert.equal(retryArt(image),third,'ready sheets are not restarted');
+});
+
+test('the first frame collects cached costume and sprite requests even if their drawing takes a fallback path',async()=>{
+ globalThis.Image=class {};
+ try{
+  const {collectFrameArt}=await import('../dist/asset-url.js');
+  const {spriteImage,drawSprite}=await import('../dist/sprite-art.js');
+  const {costumeImage}=await import('../dist/costumes.js');
+  const companion=spriteImage('followers-family-v2.png'),hero=costumeImage('original');
+  const used=collectFrameArt(()=>{
+   costumeImage('original');
+   assert.equal(drawSprite({},'followers-family-v2.png',0,0,4,5,0,0,48),false);
+  });
+  assert.deepEqual([...used],[hero,companion]);
+  assert.deepEqual([...collectFrameArt(()=>{})],[]);
+ }finally{delete globalThis.Image}
+});
