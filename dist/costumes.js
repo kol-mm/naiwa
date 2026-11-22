@@ -1,4 +1,4 @@
-import {artLoaded,loadArt} from './asset-url.js';
+import {artLoaded,frameArt,loadArt} from './asset-url.js';
 export const COSTUMES=Object.freeze([
  {id:'original',name:'经典奶蛙',detail:'原汁原味，挺着肚子去冒险。',file:'naiwa-pixel-v2.png',accent:'#e8c468'},
  {id:'kobe',name:'科比版奶蛙',detail:'24 号紫金球衣 · 篮球鞋',file:'costume-kobe-v1.png',accent:'#b399dc'},
@@ -45,7 +45,7 @@ const sheets=new Map();
 export function costumeImage(id){
  const def=costumeById(id);if(!sheets.has(def.id)&&typeof Image!=='undefined'){
   const im=new Image();sheets.set(def.id,im);loadArt(im,def.file);
- }return sheets.get(def.id)||null;
+ }return frameArt(sheets.get(def.id)||null);
 }
 export async function loadCostume(id){
  const def=costumeById(id),im=costumeImage(def.id);

@@ -9,49 +9,75 @@ export function assetUrl(file){return new URL('./assets/'+assetFile(file),import
 export function assetPath(file){return 'assets/'+assetFile(file)}
 let held=null,release=null;
 const queue=new Map(),ready=new Promise(resolve=>{release=resolve});
-const imageResults=new WeakMap();
-const preloads=new WeakMap(),decoded=new WeakSet();
+const requests=new WeakMap();
+let frameImages;
+// During a room change the renderer itself identifies any extra art in the saved scene.
+export function collectFrameArt(paint){
+ const previous=frameImages,images=new Set();
+ frameImages=images;
+ try{paint()}finally{frameImages=previous}
+ return images;
+}
+export function frameArt(image){
+ if(frameImages&&image)frameImages.add(image);
+ return image;
+}
 function holding(){
  if(held===null)held=typeof document!=='undefined'&&!!document.documentElement?.hasAttribute?.('data-art-hold');
  return held;
 }
 // Starts (or queues) an image download. The name is kept for atlas lookups, since the URL may be .webp.
-export function loadArt(image,file){
+export function loadArt(image,file,retry=0){
  image.assetName=file;
- const url=assetUrl(file);
- const source=WEBP.has(file)?new URL('./assets/'+file,import.meta.url).href:null;
- imageResults.set(image,new Promise(resolve=>{
-  let canFallback=source!==null;
-  function finish(ok){image.onload=null;image.onerror=null;resolve(ok)}
-  image.onload=()=>finish(true);
-  image.onerror=()=>{
-   if(!canFallback){finish(false);return}
-   canFallback=false;
-   image.src=source;
-  };
-  const start=()=>{image.src=url};
-  if(holding())queue.set(image,start);else start();
- }));
+ const suffix=retry?'?retry='+retry:'';
+ const state={retry,decoded:false};
+ requests.get(image)?.settle(false);
+ requests.set(image,state);
+ state.loaded=new Promise(resolve=>{state.settle=resolve});
+ let fallback=WEBP.has(file);
+ function finish(ok){
+  if(requests.get(image)!==state)return;
+  image.onload=image.onerror=null;
+  state.settle(ok);
+ }
+ image.onload=()=>finish(true);
+ image.onerror=()=>{
+  if(requests.get(image)!==state)return;
+  if(!fallback){finish(false);return}
+  fallback=false;
+  image.src=new URL('./assets/'+file,import.meta.url).href+suffix;
+ };
+ const start=()=>{image.src=assetUrl(file)+suffix};
+ if(holding())queue.set(image,start);else start();
  return image;
 }
 // Callers waiting for the sprite see the final result of both formats.
-export function artLoaded(image){return imageResults.get(image)??Promise.resolve(false)}
+export function artLoaded(image){return requests.get(image)?.loaded??Promise.resolve(false)}
 // The title and the renderer share the Image object, including its PNG retry.
 export function preloadArt(image){
- if(!image||!imageResults.has(image))return Promise.resolve(false);
- if(preloads.has(image))return preloads.get(image);
+ const state=requests.get(image);
+ if(!state)return Promise.resolve(false);
+ if(state.preload)return state.preload;
  const start=queue.get(image);
  if(start){queue.delete(image);start()}
- const result=artLoaded(image).then(async loaded=>{
+ state.preload=state.loaded.then(async loaded=>{
   if(!loaded)return false;
   try{await image.decode?.()}catch{if(!image.naturalWidth)return false}
-  decoded.add(image);
+  if(requests.get(image)!==state)return false;
+  state.decoded=true;
   return true;
  });
- preloads.set(image,result);
- return result;
+ return state.preload;
 }
-export function artDecoded(image){return decoded.has(image)}
+export function retryArt(image){
+ const state=requests.get(image);
+ if(state&&!state.decoded){
+  loadArt(image,image.assetName,state.retry+1);
+  return preloadArt(image);
+ }
+ return preloadArt(image);
+}
+export function artDecoded(image){return requests.get(image)?.decoded===true}
 export function artReady(){return holding()?ready:Promise.resolve()}
 export function artHeld(){return holding()}
 export function releaseArt(){
