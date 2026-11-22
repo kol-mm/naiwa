@@ -1,5 +1,6 @@
 import {beginRevive,advanceRevive,cancelRevive,finishRevive,REVIVE_SECONDS,WatchClock} from './revive.js';
 import {spriteImage,drawSprite} from './sprite-art.js';
+import {drawableArt} from './scene-art.js';
 export function createRevivePlayer({getGame,overlay,getSound,onSound,onCancel,onRevive,createAudio=url=>new Audio(url)}){
  let g=null,media=null,token=0,message='',clock=new WatchClock();
  const active=()=>g&&getGame()===g&&g.mode==='revive';
@@ -34,7 +35,7 @@ export function createRevivePlayer({getGame,overlay,getSound,onSound,onCancel,on
  }
  function update(){
   if(!active())return;media.muted=!getSound()||media.paused;const canvas=overlay.querySelector('#reviveScene');if(!canvas){pause();return}
-  const image=spriteImage('naiwa-pixel-v2.png'),loaded=!!(image?.complete&&image.naturalWidth),elapsed=g.reviveWatch.elapsed;
+  const loaded=!!drawableArt(spriteImage('naiwa-pixel-v2.png')),elapsed=g.reviveWatch.elapsed;
   const delta=clock.sample({time:media.currentTime,duration:media.duration,playing:!media.paused&&media.readyState>=2,visible:!document.hidden&&loaded,seeking:media.seeking});
   if(elapsed<REVIVE_SECONDS&&advanceRevive(g,delta)){media.pause();message='';clock.reset()}
   const t=g.reviveWatch.elapsed,c=canvas.getContext('2d');c.imageSmoothingEnabled=false;c.fillStyle='#f5e5b5';c.fillRect(0,0,480,240);
