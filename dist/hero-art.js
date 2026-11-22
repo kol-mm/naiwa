@@ -2,6 +2,7 @@ import {atlasRegion} from './atlas-regions.js';
 import {selectedCostume,costumeById,costumeImage} from './costumes.js';
 import {COSTUME_REGIONS} from './costume-regions.js';
 import {FROG_JUMP_SECONDS} from './frog-jump.js';
+import {drawableArt} from './scene-art.js';
 const tinted=new Map();
 export function heroFrame(g){
  if(g.sandy?.left>0)return g.p.dash>0?13:(g.heroMoving?4+Math.floor((g.actionClock||0)*12)%4:8+Math.floor((g.actionClock||0)*12)%4);
@@ -15,28 +16,34 @@ export function heroFrame(g){
 }
 export function drawHero(c,g,x,y,size=1,ghost=false,style={}){
  const id=style.costumeId??selectedCostume(),costume=costumeById(id),sheet=costumeImage('original'),candidate=id==='original'?sheet:costumeImage(id);
- const active=candidate?.complete&&candidate.naturalWidth?candidate:sheet;
- if(!active?.complete||!active.naturalWidth)return false;
- const file=active===sheet?'naiwa-pixel-v2.png':costume.file;
+ const chosen=drawableArt(candidate),active=chosen||drawableArt(sheet);
+ if(!active)return false;
+ const file=chosen?costume.file:'naiwa-pixel-v2.png';
  const frame=style.frame??heroFrame(g),r=heroDrawRect(active,frame,file);
  c.save();c.translate(Math.round(x),Math.round(y));c.scale(size,size);
  if(!ghost){c.fillStyle='#25343c35';c.fillRect(-19,19,38,6)}
  if(!ghost&&style.frame===undefined&&g.p.dash>0)c.translate(0,-Math.round(Math.sin(Math.PI*(1-Math.min(1,g.p.dash/FROG_JUMP_SECONDS)))*30));
  if((style.face??g.p.face)>0)c.scale(-1,1);
  c.imageSmoothingEnabled=false;
- if(style.tint){const key=file+frame+style.tint;let tile=tinted.get(key);if(!tile){if(tinted.size>=160)tinted.clear();tile=document.createElement('canvas');tile.width=tile.height=140;const tc=tile.getContext('2d');tc.imageSmoothingEnabled=false;tc.drawImage(active,r.left,r.top,r.w,r.h,r.dx+70,r.dy+90,r.dw,r.dh);tc.globalCompositeOperation='source-in';tc.fillStyle=style.tint;tc.fillRect(0,0,140,140);tinted.set(key,tile)}c.drawImage(tile,-70,-90,140,140)}
+ if(style.tint){const key=file+':'+active.naturalWidth+':'+frame+style.tint;let tile=tinted.get(key);if(!tile){if(tinted.size>=160)tinted.clear();tile=document.createElement('canvas');tile.width=tile.height=140;const tc=tile.getContext('2d');tc.imageSmoothingEnabled=false;tc.drawImage(active,r.left,r.top,r.w,r.h,r.dx+70,r.dy+90,r.dw,r.dh);tc.globalCompositeOperation='source-in';tc.fillStyle=style.tint;tc.fillRect(0,0,140,140);tinted.set(key,tile)}c.drawImage(tile,-70,-90,140,140)}
  else c.drawImage(active,r.left,r.top,r.w,r.h,r.dx,r.dy,r.dw,r.dh);
  c.restore();return true;
 }
 
 // Keep the original scale and anchor while allowing poses to extend beyond nominal cells.
 export function heroDrawRect(image,frame,file='naiwa-pixel-v2.png'){
- const col=frame%4,row=Math.floor(frame/4),cw=image.naturalWidth/4,ch=image.naturalHeight/4;
+ const width=image.atlasWidth??image.naturalWidth,height=image.atlasHeight??image.naturalHeight;
+ const col=frame%4,row=Math.floor(frame/4),cw=width/4,ch=height/4;
+ let rect;
  if(COSTUME_REGIONS[file]){
   const [left,top,w,h]=COSTUME_REGIONS[file][frame],scale=90/ch;
-  return {left,top,w,h,dx:(left-(col+.5)*cw)*scale,dy:(top-(row+1)*ch)*scale+25,dw:w*scale,dh:h*scale};
+  rect={left,top,w,h,dx:(left-(col+.5)*cw)*scale,dy:(top-(row+1)*ch)*scale+25,dw:w*scale,dh:h*scale};
+ }else{
+  const r=atlasRegion(file,4,4,row,col,width,height);
+  rect={...r,dx:-45+(r.left-col*cw)*90/cw,dy:-65+(r.top-row*ch)*90/ch,dw:r.w*90/cw,dh:r.h*90/ch};
  }
- const r=atlasRegion(file,4,4,row,col,image.naturalWidth,image.naturalHeight);
- return {...r,dx:-45+(r.left-col*cw)*90/cw,dy:-65+(r.top-row*ch)*90/ch,dw:r.w*90/cw,dh:r.h*90/ch};
+ if(!image.atlasWidth)return rect;
+ const sx=image.naturalWidth/width,sy=image.naturalHeight/height;
+ return {...rect,left:rect.left*sx,top:rect.top*sy,w:rect.w*sx,h:rect.h*sy};
 }
 

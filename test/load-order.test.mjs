@@ -72,10 +72,11 @@ test('a failed WebP keeps the same atlas and waits for its PNG before declaring 
 
 test('first-room hints and runtime requests have identical URLs under a deployment prefix',async()=>{
  const {assetPath}=await import('../dist/asset-url.js');
+ const {previewPath}=await import('../dist/scene-art.js');
  const html=read('index.html');
  const hints=[...html.matchAll(/<link rel="preload" as="image" href="([^"]+)"/g)].map(match=>match[1]);
- const names=['cover-rescue-v2.png','rooms-bright-v1.png','naiwa-pixel-v2.png'];
- assert.deepEqual(hints.sort(),names.map(assetPath).sort());
+ const expected=[assetPath('cover-rescue-v2.png'),previewPath('rooms-bright-v1.png'),previewPath('naiwa-pixel-v2.png')];
+ assert.deepEqual(hints.sort(),expected.sort());
  const entry=html.match(/<script type="module" src="([^"]+)"/)[1];
  assert.ok(html.includes('<link rel="modulepreload" href="'+entry+'"'));
 });

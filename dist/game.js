@@ -1,4 +1,5 @@
 import {createGameRenderer} from './game-renderer.js';
+import {prepareGameCanvas} from './canvas-compat.js';
 import {createRunStore} from './run-save.js';
 import {costumeImage,selectedCostume,setCostume} from './costumes.js';
 import {creatorLinks,bindCreatorLinks} from './creator.js';
@@ -31,7 +32,8 @@ import {drawTerrain} from './terrain-art.js';
 import {createStatsPanel} from './stats.js';
 import {Game,ITEMS,W,H,CHAPTERS,BOSS_NAMES} from './campaign.js';
 import {drawCampaign,drawBoss,drawRunner} from './campaign-art.js';
-import {artDecoded,preloadArt,retryArt,collectFrameArt,assetPath,releaseArt} from './asset-url.js';
+import {collectFrameArt,assetPath,releaseArt} from './asset-url.js';
+import {preloadSceneArt,retrySceneArt,sceneArtReady} from './scene-art.js';
 import {readPreferences,writePreferences,renderCap,safeStorage} from './preferences.js';
 import {readConnectedGamepad,gamepadPauseAction} from './gamepad.js';
 import {settingsHTML,bindSettings} from './settings-ui.js';
@@ -39,8 +41,13 @@ import {CODEX_KEY,mergeCodex,readCodex,recordCodex,saveCodex,codexHTML,paintCode
 import {createSandboxState,startSandbox,sandboxPanelHTML,runSandboxAction,drawSandboxOverlay} from './sandbox.js';
 import {recoverableSaveMode} from './run-mode.js';
 import {createPanelResumeState} from './panel-mode.js';
-import {createLoadingVeil} from './loading-veil.js';
-const storage=safeStorage(),$=s=>document.querySelector(s),prefs=readPreferences(storage),canvas=$('#game'),renderer=createGameRenderer(canvas,window,{maxScale:renderCap(prefs.quality)}),ctx=renderer.context,overlay=$('#overlay'),loadingVeil=createLoadingVeil($('#loadingVeil'));
+import {createSceneTransition} from './loading-veil.js';
+const storage=safeStorage(),$=s=>document.querySelector(s),prefs=readPreferences(storage),canvas=$('#game'),renderer=createGameRenderer(canvas,window,{maxScale:renderCap(prefs.quality)}),overlay=$('#overlay');
+const transition=createSceneTransition({notice:$('#loadingVeil'),hold:$('#entryHold'),overlay,canvas});
+const probeCanvas=document.createElement('canvas');
+probeCanvas.width=probeCanvas.height=1;
+const probeContext=prepareGameCanvas(probeCanvas.getContext('2d'));
+let ctx=renderer.context;
 const soundMix=new SoundMixer(),createAudio=url=>soundMix.createAudio(url),createVoiceAudio=url=>soundMix.createBufferedAudio(url);
 soundMix.setVolume(prefs.volume);
 const bossVoice=new BossAudio({createAudio:createVoiceAudio}),bossDemo=new URLSearchParams(location.search).get('boss-demo')==='1';const voice=new GameAudio({createAudio:createVoiceAudio,onError:()=>toast('大笑音效暂未就绪，请再次点击操作键。')});const itemVoice=new ItemAudio({createAudio:createVoiceAudio,canPlay:key=>game.mode==='play'&&ownsItemVoice(game,key),isBusy:()=>!!bossVoice.current||voice.playing});const syncRoomVoices=createRoomVoiceBoundary({bossVoice,itemVoice});let pauseMode='play';const panelResume=createPanelResumeState();
@@ -103,8 +110,8 @@ function title(){game.mode='title';keepGameFullscreen(false);leaveSandbox();$('#
  const saved=bossDemo?{status:'empty'}:runStore.read(),available=saved.status==='ok';
  const entry=available?saved.game:null;
  const coverArt=entryImages(entry,available?saved.costume:selectedCostume());
- Promise.all(coverArt.map(preloadArt)).then(()=>{
-  if(game.mode==='title')prepareChapterArt(entry?.floor??1).forEach(preloadArt);
+ Promise.all(coverArt.map(preloadSceneArt)).then(()=>{
+  if(game.mode==='title')prepareChapterArt(entry?.floor??1).forEach(preloadSceneArt);
  });
  if(saved.storageBlocked)codexState.sessionOnly=true;
  overlay.innerHTML=`<section class="title-cover ${available?'has-save':''}" aria-labelledby="coverTitle"><img class="cover-art" src="${assetPath('cover-rescue-v2.png')}" alt="奶蛙用大笑闯向地牢，牛来与美鼠守着关住奶豆的牢笼" fetchpriority="high"><div class="cover-copy"><div class="cover-kicker">池塘奇遇 · 救回奶豆</div><h2 id="coverTitle">奶蛙<span>的结合</span></h2><p class="cover-story">牛来和美鼠抓走了奶豆。<br>这一次，用大笑把孩子带回家。</p>${available?`<div class="cover-save"><span class="cover-save-label">上次的冒险 · 已自动保存</span><p class="cover-save-info"><b>第 ${saved.game.floor} 章 · ${CHAPTERS[saved.game.floor-1]}</b><span>${saved.game.mode==='dead'?'复活待处理':`生命 ${saved.game.p.hp}/${saved.game.p.maxHp} · 道具 ${saved.game.items.length} 件`} · ${Math.floor(saved.game.elapsed/60)}:${String(Math.floor(saved.game.elapsed%60)).padStart(2,'0')}</span></p><button class="primary" id="continueRun">继续游戏 <span aria-hidden="true">→</span></button></div>`:''}<div class="cover-actions"><button class="${available?'cover-restart':'primary'}" id="start">${available?'重新开始':'出发救奶豆 <span aria-hidden="true">→</span>'}</button><button class="cover-help" id="titleHelp">玩法说明</button><button class="cover-sandbox" id="sandboxStart">沙盒试玩</button><button class="cover-help" id="coverSettings">⚙ 设置</button></div><p class="cover-hint">${saved.storageBlocked?'当前浏览器限制存储，本次冒险可正常游玩。':saved.status==='error'?'存档暂时无法读取。可尝试重新打开游戏。':'每 2 秒自动保存 · 本机继续冒险'}</p></div><span class="cover-edition">THE BINDING OF NAIWA</span>${bossDemo?'':`<button class="cover-codex" id="titleCodex" aria-label="打开奶蛙图鉴">图鉴<small>${codexCount()}</small></button>`}</section>`;
@@ -134,34 +141,36 @@ function entryImages(run,costume){
  if(costume&&costume!=='original')images.push(costumeImage('original'));
  return images;
 }
-function revealChapter(label,images=entryImages(game,selectedCostume())){
- // Paint while covered. A restored room can contain followers, pickups or effects
- // whose sheets are only looked up by the renderer.
- const needed=collectFrameArt(()=>paintScene(false));
+let pendingRoom=null;
+function revealChapter(images=entryImages(game,selectedCostume())){
+ pendingRoom=game.room;
+ // Discover optional sprites in the real saved scene without clearing the visible canvas.
+ let needed;
+ ctx=probeContext;
+ try{needed=collectFrameArt(()=>draw(game.elapsed,false))}
+ finally{ctx=renderer.context}
  for(const image of images)needed.add(image);
- const sheets=[...needed],cached=sheets.every(artDecoded);
- const ready=cached?null:Promise.all(sheets.map(preloadArt)).then(results=>results.every(Boolean));
- loadingVeil.hide(label,ready,{
-  immediate:cached,
-  beforeReveal:cached?undefined:()=>paintScene(false),
+ const sheets=[...needed];
+ const ready=sheets.every(sceneArtReady)?null:Promise.all(sheets.map(preloadSceneArt)).then(results=>results.every(Boolean));
+ transition.present(ready,{
+  paint:()=>{pendingRoom=null;paintScene(false)},
   retry(){
-   loadingVeil.show('正在重新加载贴图…',{min:0});
-   for(const sheet of sheets)retryArt(sheet);
-   revealChapter(label,images);
+   transition.begin();
+   for(const sheet of sheets)retrySceneArt(sheet);
+   revealChapter(images);
    canvas.focus();
   },
   back(){
    saveAndTitle();
    if(game.mode==='title'){
-    loadingVeil.hide(null,null,{immediate:true});
     ($('#continueRun')||$('#start'))?.focus();
    }
   }
  });
 }
 function continueRun(){
- loadingVeil.show('正在恢复上次冒险…',{min:0});
- const saved=runStore.read();if(saved.status!=='ok'){title();loadingVeil.hide('存档暂时无法读取');toast('存档无法读取，请尝试重新打开游戏。');return}
+ transition.begin();
+ const saved=runStore.read();if(saved.status!=='ok'){transition.cancel();title();toast('存档无法读取，请尝试重新打开游戏。');return}
  revivePlayer.stop();voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();bossVoice.reset();itemVoice.reset();
  resetTouchInput();leaveSandbox();releaseArt();$('#settingsOpen').hidden=false;game=saved.game;floorSeen=game.floor;hasRun=true;saveFailed=false;lastSaveAt=performance.now();panelResume.clear();setCostume(saved.costume,storage);
  if(!game.codexRunId)game.codexRunId='legacy-'+saved.savedAt.toString(36);
@@ -173,7 +182,7 @@ function continueRun(){
  else if(game.mode==='win')end(true);
  else if(game.mode==='rescue')showRescue();
  else {game.mode='play';overlay.innerHTML='';canvas.focus();last=performance.now()}
- revealChapter('继续冒险');
+ revealChapter();
 }
 function requestNewRun(){
  const saved=runStore.read();
@@ -185,6 +194,8 @@ function requestNewRun(){
 }
 function saveAndTitle(){
  if(!saveCurrentRun())return;
+ pendingRoom=null;
+ transition.cancel();
  revivePlayer.stop();voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();resetTouchInput();hasRun=false;game.mode='title';panelResume.clear();title();
 }
 window.naiwaSaveAndPause=()=>{window.dispatchEvent(new Event('blur'));return saveCurrentRun()};
@@ -193,11 +204,11 @@ window.addEventListener('pagehide',saveCurrentRun);
 window.addEventListener('blur',saveCurrentRun);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)saveCurrentRun()});
 
-function start(){loadingVeil.show('正在进入池塘…',{min:0});$('#settingsOpen').hidden=false;revivePlayer.stop();voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();bossVoice.reset();itemVoice.reset();voice.unlock();bossVoice.unlock();itemVoice.unlock();keepGameFullscreen(true);void requestGameFullscreen({mobile:touchPointer.matches});resetTouchInput();leaveSandbox();releaseArt();game=new Game();game.start();hasRun=true;panelResume.clear();last=performance.now();if(bossDemo){game.floor=5;game.generate();game.enter(game.rooms.find(r=>r.exists&&r.type==='boss').id,'top');game.hurt=()=>{};game.p.damage=3}floorSeen=game.floor;overlay.innerHTML='';keys.clear();mouse.down=false;updateUI();canvas.focus();beep(650,.15);toast(matchMedia('(pointer:coarse), (max-width:780px), (max-width:1100px) and (max-height:600px)').matches?'左手移动 · 右手十字键射击':'方向键大笑；E 互动；B 炸弹；造成伤害充能，Q 大爆笑击退。');saveCurrentRun();revealChapter(`第 ${game.floor} 章 · ${CHAPTERS[game.floor-1]}`)}
+function start(){transition.begin();$('#settingsOpen').hidden=false;revivePlayer.stop();voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();bossVoice.reset();itemVoice.reset();voice.unlock();bossVoice.unlock();itemVoice.unlock();keepGameFullscreen(true);void requestGameFullscreen({mobile:touchPointer.matches});resetTouchInput();leaveSandbox();releaseArt();game=new Game();game.start();hasRun=true;panelResume.clear();last=performance.now();if(bossDemo){game.floor=5;game.generate();game.enter(game.rooms.find(r=>r.exists&&r.type==='boss').id,'top');game.hurt=()=>{};game.p.damage=3}floorSeen=game.floor;overlay.innerHTML='';keys.clear();mouse.down=false;updateUI();canvas.focus();beep(650,.15);toast(matchMedia('(pointer:coarse), (max-width:780px), (max-width:1100px) and (max-height:600px)').matches?'左手移动 · 右手十字键射击':'方向键大笑；E 互动；B 炸弹；造成伤害充能，Q 大爆笑击退。');saveCurrentRun();revealChapter()}
 // 沙盒试玩: a separate free-play run. The saved run stays untouched for 继续游戏.
 function syncSandboxChrome(){document.documentElement.toggleAttribute('data-sandbox',sandbox.active);$('#sandboxTools').hidden=!sandbox.active;const item=document.querySelector('[data-menu-action="sandboxTools"]');if(item)item.hidden=!sandbox.active}
 function leaveSandbox(){if(!sandbox.active)return;sandbox.active=false;sandbox.speed=1;syncSandboxChrome()}
-function startSandboxRun(){loadingVeil.show('正在搭建沙盒…',{min:0});revivePlayer.stop();voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();bossVoice.reset();itemVoice.reset();voice.unlock();bossVoice.unlock();itemVoice.unlock();keepGameFullscreen(true);void requestGameFullscreen({mobile:touchPointer.matches});resetTouchInput();releaseArt();hasRun=false;Object.assign(sandbox,createSandboxState(),{active:true});game=startSandbox(new Game(),sandbox);floorSeen=game.floor;panelResume.clear();last=performance.now();overlay.innerHTML='';keys.clear();mouse.down=false;syncSandboxChrome();updateUI();canvas.focus();beep(650,.15);toast(mobileMedia.matches?'沙盒试玩：点菜单 ☰ 里的“沙盒工具”切换章节、生成敌人、拿放道具。':'沙盒试玩：按 T 打开沙盒工具，切换章节、生成敌人、拿放道具。');revealChapter('沙盒已就绪')}
+function startSandboxRun(){transition.begin();revivePlayer.stop();voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();bossVoice.reset();itemVoice.reset();voice.unlock();bossVoice.unlock();itemVoice.unlock();keepGameFullscreen(true);void requestGameFullscreen({mobile:touchPointer.matches});resetTouchInput();releaseArt();hasRun=false;Object.assign(sandbox,createSandboxState(),{active:true});game=startSandbox(new Game(),sandbox);floorSeen=game.floor;panelResume.clear();last=performance.now();overlay.innerHTML='';keys.clear();mouse.down=false;syncSandboxChrome();updateUI();canvas.focus();beep(650,.15);toast(mobileMedia.matches?'沙盒试玩：点菜单 ☰ 里的“沙盒工具”切换章节、生成敌人、拿放道具。':'沙盒试玩：按 T 打开沙盒工具，切换章节、生成敌人、拿放道具。');revealChapter()}
 function sandboxPanelOpen(){return game.mode==='paused'&&!!overlay.querySelector('.sandbox-modal')}
 function toggleSandboxPanel(){if(document.body.classList.contains('mobile-panel-open'))return;if(sandboxPanelOpen())resume();else openSandboxPanel()}
 function openSandboxPanel(){if(!sandbox.active||document.body.classList.contains('mobile-panel-open'))return;if(game.mode==='paused'&&!sandboxPanelOpen()&&!overlay.querySelector('#pauseSandboxTools'))return;if(['play','rescue'].includes(game.mode)){pauseMode=game.mode;voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();game.mode='paused'}else if(game.mode!=='paused')return;resetTouchInput();renderSandboxPanel(false);overlay.querySelector('[data-sandbox-tab][aria-selected="true"]')?.focus({preventScroll:true})}
@@ -297,14 +308,15 @@ function prepareActiveRoom(){
  if(game.mode==='title'||game.room===preparedRoom)return;
  const room=preparedRoom=game.room;
  const images=entryImages(game,selectedCostume());
- if(!loadingVeil.isBlocking()&&game.floor===floorSeen){
-  loadingVeil.show('正在准备房间…',{min:0});
-  revealChapter('房间已就绪',images);
+ if((!transition.isBlocking()||pendingRoom&&pendingRoom!==room)&&game.floor===floorSeen){
+  transition.begin();
+  revealChapter(images);
  }
- Promise.all(images.map(preloadArt)).then(()=>{
+ Promise.all(images.map(preloadSceneArt)).then(()=>{
   if(game.mode==='title'||game.room!==room)return;
-  prepareChapterArt(game.floor).forEach(preloadArt);
-  if(bossArtDue(game.rooms,game.roomId,room.type))prepareBossArt(game.floor).forEach(preloadArt);
+  prepareChapterArt(game.floor).forEach(preloadSceneArt);
+  if(bossArtDue(game.rooms,game.roomId,room.type))prepareBossArt(game.floor).forEach(preloadSceneArt);
+  if(room.type==='boss'&&game.floor<game.finalFloor)prepareChapterArt(game.floor+1).forEach(preloadSceneArt);
  });
 }
 function updateUI(){prepareActiveRoom();const p=game.p;renderHearts(p);$('#hearts').setAttribute('aria-label',`生命 ${p.hp} / ${p.maxHp}`);$('#floor').textContent=`0${game.floor} / ${CHAPTERS[game.floor-1]}`;const names={start:'豆包的接应点',fight:'追踪线索',treasure:'道具房',shop:'补给商店',vault:'钥匙补给库',cache:'封墙藏室',challenge:'挑战房',boss:BOSS_NAMES[game.floor-1]};$('#room').textContent=(game.room.encounterName||names[game.room.type])+(game.room.layoutName?' / '+game.room.layoutName:'')+' · '+(game.room.clear?'门已打开':'清空小怪后开门');$('#killcount').textContent=String(game.kills).padStart(2,'0');$('#explored').textContent=game.rooms.filter(r=>r.visited).length+' / '+game.rooms.filter(r=>r.exists).length;$('#map').innerHTML=game.rooms.map(r=>'<div class="map-cell '+(!r.exists||!r.seen||(r.hidden&&!r.revealed&&!r.visited)?'fog ':(r.visited?'visited ':'seen ')+'t-'+r.type+' ')+(r.id===game.roomId?'here':'')+'" title="'+(r.seen&&r.exists&&(!r.hidden||r.revealed||r.visited)?(r.encounterName||names[r.type]):'未知')+'">'+(!r.exists||!r.seen||(r.hidden&&!r.revealed&&!r.visited)?'':r.id===game.roomId?'●':r.type==='treasure'?'✧':r.type==='shop'?'¤':r.type==='vault'?'⚿':r.type==='cache'?'✹':r.type==='boss'?'♛':r.type==='challenge'?'!':'·')+'</div>').join('');updateMiniMap();updateStats(game);$('#itemcount').textContent=game.items.length+' 件';$('#inventory').innerHTML=game.items.length?game.items.map(id=>{const i=ITEMS.find(i=>i.id===id);return `<div class="item-row"><div class="item-icon">${itemIcon(i)}</div><div><strong>${i.name}</strong><small>${i.short}</small></div></div>`}).join(''):'<div class="empty-bag">✧<p>现在还是一只普通奶蛙。<br>去找到你的第一件怪东西。</p></div>';}
@@ -314,7 +326,7 @@ function showRescue(){clearTimeout(toastTimer);$('#toast').classList.remove('sho
 function toggleSound(){sound=!sound;setGameSound(sound,{voice,bossVoice,itemVoice,soundMix},game.mode==='revive');try{storage?.setItem('naiwa-sound',String(sound))}catch{}syncSound()}
 function syncSound(){for(const id of ['sound','rescueSound']){const b=$('#'+id);if(b)b.textContent='声音 '+(sound?'开':'关')}}
 function processEvents(){let saveNeeded=false;soundMix.beginFrame();const changedRoom=syncRoomVoices(game.room),itemCues=[];for(const e of game.events.splice(0)){if(e.type==='clear'||(e.type==='room'&&e.room))observeCodex(e.room,[]);if(e.type==='choice')observeCodex(game.room,e.choices);if(['room','item','hurt','shield','heal','clear','end','rescue','choice'].includes(e.type))saveNeeded=true;if(e.type==='bossVoice'&&game.mode==='play'){requestBossCue({voice,bossVoice,itemVoice},e)}if(e.type==='itemVoice'&&game.mode==='play')itemCues.push(e.key);if(e.type==='sandyStart'){shake=2;beep(85,.35,'sine',.025,3)}if(e.type==='sandyEnd')beep(260,.22,'triangle',.025);if(e.type==='gojoSplit')beep(760,.15,'triangle',.02);if(e.type==='gojoFuse')beep(390,.16,'sine',.02,2);if(e.type==='gojoBlast'){shake=4;beep(90,.2,'triangle',.025,3)}if(e.type==='room'&&changedRoom)itemCues.length=0;if(e.type==='wardrobe')wardrobe.open();if(e.type==='rescue')showRescue();if(e.type==='cageBreak')playLaugh({long:true});if(e.type==='choice')showChoices(e.title,e.choices);if(e.type==='end')end(e.win);if(e.type==='toast')toast(e.text);if(e.type==='item'||e.type==='choice')codexCheckedAt=0;if(e.type==='item'){if(e.id==='phoebe')itemCues.push('phoebe');if(e.id==='quietbadge')itemCues.push('quiet');const i=ITEMS.find(i=>i.id===e.id);toast(i.name+' · '+i.short);beep(900,.2,'triangle',.025,3);$('#frog-note').textContent='“'+i.name+'？有点怪，再捡一个！”'}if(e.type==='hurt'){game.heroHurtUntil=game.elapsed+.24;shake=5;beep(120,.18,'sawtooth',.025,5)}if(e.type==='shoot'){game.heroLaughUntil=game.elapsed+.22;beep(520,.045)}if(e.type==='kill')beep(240,.08,'triangle');if(e.type==='clear'&&game.mode!=='rescue'){toast('房间清空！门开了，继续探索。');beep(760,.15,'triangle',.025,3)}if(e.type==='dash')beep(360,.12,'triangle',.025,2);if(e.type==='laugh'){playLaugh();game.heroLaughUntil=game.elapsed+.5;beep(150,.25,'square',.012)}if(e.type==='heal')beep(1000,.18,'sine',.025,4);if(e.type!=='shoot')updateUI();}if(game.mode==='play')itemVoice.requestMany(itemCues);soundMix.endFrame();if(saveNeeded)saveCurrentRun();}
-function syncFloorTransition(){if(game.floor===floorSeen)return;floorSeen=game.floor;const text=`第 ${game.floor} 章 · ${CHAPTERS[game.floor-1]}`;loadingVeil.show(`正在前往${text}`,{min:0});revealChapter(text)}
+function syncFloorTransition(){if(game.floor===floorSeen)return;floorSeen=game.floor;transition.begin();revealChapter()}
 function ellipse(x,y,rx,ry,color,stroke=null,lw=2){ctx.beginPath();ctx.ellipse(x,y,Math.max(.1,rx),Math.max(.1,ry),0,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();if(stroke){ctx.lineWidth=lw;ctx.strokeStyle=stroke;ctx.stroke()}}
 function line(points,color,width=2){ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.lineWidth=width;ctx.lineJoin='round';ctx.lineCap='round';ctx.strokeStyle=color;ctx.stroke()}
 function roundRect(x,y,w,h,r,color,stroke){ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fillStyle=color;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=2;ctx.stroke()}}
@@ -333,7 +345,7 @@ function paintScene(animate){
  if(sandbox.active)drawSandboxOverlay(ctx,game,sandbox,fps);
  updateRescueUI(overlay,game);
 }
-function draw(t,animate){renderer.beginFrame();ctx.save();if(shake>0){const amount=shake*prefs.shake;if(amount>0)ctx.translate(Math.sin(t*70)*amount,Math.cos(t*85)*amount);if(animate)shake*=.87;if(shake<.2)shake=0}roomDraw(t);drawCampaign(ctx,game,t);for(const e of game.room.enemies)if(!e.dead&&e.starMark>0){ctx.fillStyle='#f5d877';ctx.font='bold 18px system-ui';ctx.textAlign='center';ctx.fillText('☆',e.x,enemyIndicatorY(e)-7)}for(const b of game.bullets){drawPixelShot(ctx,b,false)}
+function draw(t,animate){if(ctx===renderer.context)renderer.beginFrame();ctx.save();if(shake>0){const amount=shake*prefs.shake;if(amount>0)ctx.translate(Math.sin(t*70)*amount,Math.cos(t*85)*amount);if(animate)shake*=.87;if(shake<.2)shake=0}roomDraw(t);drawCampaign(ctx,game,t);for(const e of game.room.enemies)if(!e.dead&&e.starMark>0){ctx.fillStyle='#f5d877';ctx.font='bold 18px system-ui';ctx.textAlign='center';ctx.fillText('☆',e.x,enemyIndicatorY(e)-7)}for(const b of game.bullets){drawPixelShot(ctx,b,false)}
  for(const e of game.room.enemies||[])enemy(e,t);
  const p=game.p;drawChrono(ctx,game);
  if(p.dash>0){for(let i=1;i<4;i++){ctx.globalAlpha=.16/i;drawHero(ctx,game,p.x-p.dx*i*19,p.y-p.dy*i*19,1,true)}ctx.globalAlpha=1}
@@ -342,22 +354,22 @@ function draw(t,animate){renderer.beginFrame();ctx.save();if(shake>0){const amou
  if(p.shield){pixelRing(ctx,p.x,p.y,44,'#bde8cb',3);for(let i=0;i<4;i++){const a=t*1.5+i*Math.PI/2;ctx.fillStyle='#fff1b1';ctx.fillRect(p.x+Math.cos(a)*44-3,p.y+Math.sin(a)*44-3,6,6)}}
  if(game.has('tadpole')){const px=p.x-37,py=p.y+25+Math.sin(t*5)*5;line([[px,py],[px-15,py+8],[px-25,py+Math.sin(t*10)*8]],'#4a7264',5);ellipse(px,py,10,12,'#749e88','#4e7765');ellipse(px+3,py-3,3,4,'#e8efc7')}
  drawItemReadiness(ctx,game);drawLaughReady(ctx,game,reducedMotion.matches);for(const e of game.effects)drawPixelEffect(ctx,e);for(const v of game.particles){ctx.globalAlpha=Math.min(1,v.life*3);ctx.fillStyle=v.color;ctx.fillRect(Math.round(v.x),Math.round(v.y),Math.max(2,Math.round(v.r)),Math.max(2,Math.round(v.r)))}ctx.globalAlpha=1;for(const b of game.enemyBullets){drawPixelShot(ctx,b,true)}
- if(mouseAimActive&&mouse.down&&game.mode==='play'){const pc=game.p,aim=cardinalAim(mouse.x-pc.x,mouse.y-pc.y);if(aim.x||aim.y){const dist=Math.min(220,Math.max(44,Math.hypot(mouse.x-pc.x,mouse.y-pc.y))),sx=pc.x,sy=pc.y-6,tx=sx+aim.x*dist,ty=sy+aim.y*dist;ctx.save();ctx.strokeStyle='#f5f5d733';ctx.lineWidth=2;ctx.setLineDash([6,7]);ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(tx,ty);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#f5f5d7cc';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(tx,ty,6,0,Math.PI*2);ctx.stroke();line(aim.x?[[tx,ty-8],[tx,ty-3]]:[[tx-8,ty],[tx-3,ty]],'#f5f5d7cc');line(aim.x?[[tx,ty+3],[tx,ty+8]]:[[tx+3,ty],[tx+8,ty]],'#f5f5d7cc');ctx.restore()}}ctx.restore();const bosses=game.room.enemies?.filter(e=>e.type==='boss'&&!e.dead)||[];const boss=bosses[0];$('#bossbar').hidden=!boss;if(boss){$('#bossbar span').textContent=BOSS_NAMES[game.floor-1];$('#bossbar i').style.width=Math.max(0,bosses.reduce((s,e)=>s+e.hp,0)/game.room.enemies.filter(e=>e.type==='boss').reduce((s,e)=>s+e.maxHp,0)*100)+'%'}$('#dashStatus').textContent=p.dashCD>0?`蛙跳冷却 · ${p.dashCD.toFixed(1)}s`:'空格 · 蛙跳就绪';}
+ if(mouseAimActive&&mouse.down&&game.mode==='play'){const pc=game.p,aim=cardinalAim(mouse.x-pc.x,mouse.y-pc.y);if(aim.x||aim.y){const dist=Math.min(220,Math.max(44,Math.hypot(mouse.x-pc.x,mouse.y-pc.y))),sx=pc.x,sy=pc.y-6,tx=sx+aim.x*dist,ty=sy+aim.y*dist;ctx.save();ctx.strokeStyle='#f5f5d733';ctx.lineWidth=2;ctx.setLineDash([6,7]);ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(tx,ty);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#f5f5d7cc';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(tx,ty,6,0,Math.PI*2);ctx.stroke();line(aim.x?[[tx,ty-8],[tx,ty-3]]:[[tx-8,ty],[tx-3,ty]],'#f5f5d7cc');line(aim.x?[[tx,ty+3],[tx,ty+8]]:[[tx+3,ty],[tx+8,ty]],'#f5f5d7cc');ctx.restore()}}ctx.restore();if(ctx===probeContext)return;const bosses=game.room.enemies?.filter(e=>e.type==='boss'&&!e.dead)||[];const boss=bosses[0];$('#bossbar').hidden=!boss;if(boss){$('#bossbar span').textContent=BOSS_NAMES[game.floor-1];$('#bossbar i').style.width=Math.max(0,bosses.reduce((s,e)=>s+e.hp,0)/game.room.enemies.filter(e=>e.type==='boss').reduce((s,e)=>s+e.maxHp,0)*100)+'%'}$('#dashStatus').textContent=p.dashCD>0?`蛙跳冷却 · ${p.dashCD.toFixed(1)}s`:'空格 · 蛙跳就绪';}
 function readPadInput(){
  if(!prefs.gamepad||typeof navigator==='undefined')return null;
  return readConnectedGamepad(navigator);
 }
 let padPaused=false;
 function frame(now){if(now>last)fps+=(Math.min(240,1000/(now-last))-fps)*.08;const dt=Math.max(0,Math.min((now-last)/1000||.016,.04));last=now;
- if(loadingVeil.isBlocking()||game.mode==='title'){requestAnimationFrame(frame);return}
+ if(transition.isBlocking()||game.mode==='title'){requestAnimationFrame(frame);return}
  const pad=(['play','rescue','paused'].includes(game.mode))?readPadInput():null,clampInput=value=>Math.max(-1,Math.min(1,value));
  const pauseAction=gamepadPauseAction(pad?.pause,padPaused,game.mode);
  if(pauseAction){padPaused=true;if(pauseAction==='pause')pause();else if(mobileUI?.isOpen?.())mobileUI.closePanels();else resume();requestAnimationFrame(frame);return}
  padPaused=!!pad?.pause;
  const mx=clampInput((keys.has('d')?1:0)-(keys.has('a')?1:0)+move.x+(pad?.mx||0)),my=clampInput((keys.has('s')?1:0)-(keys.has('w')?1:0)+move.y+(pad?.my||0));let ax=(keys.has('arrowright')?1:0)-(keys.has('arrowleft')?1:0),ay=(keys.has('arrowdown')?1:0)-(keys.has('arrowup')?1:0),fire=!!(ax||ay);
  const padAiming=!!(pad&&(pad.ax||pad.ay));if(padAiming){ax=pad.ax;ay=pad.ay;fire=true}
- const attack=mobileAttack({held:touchFire,aim:touchAim,playing:game.mode==='play'}),actions=touchActions.take(),touchAiming=attack.fire,mouseControlsAim=mouse.down&&game.mode==='play'&&!fire&&!padAiming&&!touchAiming;if(mouseControlsAim){ax=mouse.x-game.p.x;ay=mouse.y-game.p.y;fire=true}mouseAimActive=mouseControlsAim;if(!fire&&touchAiming){ax=attack.ax;ay=attack.ay;fire=true}const direction=cardinalAim(ax,ay);ax=direction.x;ay=direction.y;fire=fire&&!!(ax||ay);const wasDash=game.p.dash>0,oldX=game.p.x,oldY=game.p.y;game.update(dt,{mx,my,ax,ay,fire,auto:false,dash:keys.has(' ')||actions.dash||!!pad?.dash,bomb:keys.has('b')||actions.bomb||!!pad?.bomb,use:keys.has('e')||actions.use||!!pad?.use,active:keys.has('q')||actions.active||!!pad?.active});game.heroMoving=game.mode==='play'&&Math.hypot(game.p.x-oldX,game.p.y-oldY)>.1;if(wasDash&&game.p.dash<=0)game.heroLandUntil=game.elapsed+.12;processEvents();syncFloorTransition();bossVoice.update(game.mode==='play');itemVoice.update(game.mode==='play');updateStats(game);updateLaughReady(game,dt);updateTouchStatus();$('#resources').textContent='金币 '+game.coins+'　钥匙 '+game.keys+'　炸弹 '+game.bombs+'　爆笑 '+Math.floor(game.activeCharge)+'/'+game.activeCost();if(!loadingVeil.isBlocking())paintScene(true);revivePlayer.update();if(hasRun&&now-lastSaveAt>=2000)saveCurrentRun();if(now-codexCheckedAt>=500){codexCheckedAt=now;noteCodex()}requestAnimationFrame(frame)}
-window.addEventListener('keydown',e=>{if(loadingVeil.isBlocking())return;if(game.mode==='settings'&&(e.key==='Escape'||e.key==='p'||e.key==='P')){e.preventDefault();closeSettings();return}if(codexReturn){codexKey(e);return}const k=e.key.toLowerCase();if(k==='t'&&sandbox.active&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.isComposing){e.preventDefault();if(!e.repeat)toggleSandboxPanel();return}if(game.mode==='rescue'&&(document.activeElement?.id==='rescueLaugh'||!['BUTTON','INPUT','TEXTAREA'].includes(document.activeElement?.tagName))&&k!=='p'&&k!=='escape'){if(e.repeat){if([' ','enter'].includes(k))e.preventDefault();return}if(isRescueKey(e)){e.preventDefault();pressRescue();return}}if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)&&!['BUTTON','INPUT','TEXTAREA'].includes(document.activeElement?.tagName))e.preventDefault();if((k==='p'||k==='escape')&&!e.repeat)pause();keys.add(k)});window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));window.addEventListener('blur',()=>{voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();resetTouchInput();if(['play','rescue'].includes(game.mode))pause()});document.addEventListener('visibilitychange',()=>{if(document.hidden){voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();resetTouchInput();if(['play','rescue'].includes(game.mode))pause()}});canvas.addEventListener('pointermove',pointMouseAim);
+ const attack=mobileAttack({held:touchFire,aim:touchAim,playing:game.mode==='play'}),actions=touchActions.take(),touchAiming=attack.fire,mouseControlsAim=mouse.down&&game.mode==='play'&&!fire&&!padAiming&&!touchAiming;if(mouseControlsAim){ax=mouse.x-game.p.x;ay=mouse.y-game.p.y;fire=true}mouseAimActive=mouseControlsAim;if(!fire&&touchAiming){ax=attack.ax;ay=attack.ay;fire=true}const direction=cardinalAim(ax,ay);ax=direction.x;ay=direction.y;fire=fire&&!!(ax||ay);const wasDash=game.p.dash>0,oldX=game.p.x,oldY=game.p.y;game.update(dt,{mx,my,ax,ay,fire,auto:false,dash:keys.has(' ')||actions.dash||!!pad?.dash,bomb:keys.has('b')||actions.bomb||!!pad?.bomb,use:keys.has('e')||actions.use||!!pad?.use,active:keys.has('q')||actions.active||!!pad?.active});game.heroMoving=game.mode==='play'&&Math.hypot(game.p.x-oldX,game.p.y-oldY)>.1;if(wasDash&&game.p.dash<=0)game.heroLandUntil=game.elapsed+.12;processEvents();syncFloorTransition();bossVoice.update(game.mode==='play');itemVoice.update(game.mode==='play');updateStats(game);updateLaughReady(game,dt);updateTouchStatus();$('#resources').textContent='金币 '+game.coins+'　钥匙 '+game.keys+'　炸弹 '+game.bombs+'　爆笑 '+Math.floor(game.activeCharge)+'/'+game.activeCost();if(!transition.isBlocking())paintScene(true);revivePlayer.update();if(hasRun&&now-lastSaveAt>=2000)saveCurrentRun();if(now-codexCheckedAt>=500){codexCheckedAt=now;noteCodex()}requestAnimationFrame(frame)}
+window.addEventListener('keydown',e=>{if(transition.isBlocking())return;if(game.mode==='settings'&&(e.key==='Escape'||e.key==='p'||e.key==='P')){e.preventDefault();closeSettings();return}if(codexReturn){codexKey(e);return}const k=e.key.toLowerCase();if(k==='t'&&sandbox.active&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.isComposing){e.preventDefault();if(!e.repeat)toggleSandboxPanel();return}if(game.mode==='rescue'&&(document.activeElement?.id==='rescueLaugh'||!['BUTTON','INPUT','TEXTAREA'].includes(document.activeElement?.tagName))&&k!=='p'&&k!=='escape'){if(e.repeat){if([' ','enter'].includes(k))e.preventDefault();return}if(isRescueKey(e)){e.preventDefault();pressRescue();return}}if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)&&!['BUTTON','INPUT','TEXTAREA'].includes(document.activeElement?.tagName))e.preventDefault();if((k==='p'||k==='escape')&&!e.repeat)pause();keys.add(k)});window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));window.addEventListener('blur',()=>{voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();resetTouchInput();if(['play','rescue'].includes(game.mode))pause()});document.addEventListener('visibilitychange',()=>{if(document.hidden){voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();resetTouchInput();if(['play','rescue'].includes(game.mode))pause()}});canvas.addEventListener('pointermove',pointMouseAim);
 canvas.addEventListener('pointerdown',beginMouseAim);
 canvas.addEventListener('pointerup',endMouseAim);
 canvas.addEventListener('pointercancel',endMouseAim);
@@ -409,6 +421,8 @@ installFullscreenKeeper({isMobile:()=>touchPointer.matches});
 mobileUI=setupMobileUI({canOpenMap:()=>game.mode==='play',suspend:()=>{if(!panelResume.suspend(game.mode))return false;game.mode='paused';voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();return true},resume:()=>{const mode=panelResume.restore(game.mode);if(mode){game.mode=mode;last=performance.now()}},resetInput:resetTouchInput,pause:()=>{if(['play','rescue'].includes(game.mode))pause()},notify:toast});
 
 setTimeout(releaseArt,4000);
-title();updateUI();requestAnimationFrame(frame);loadingVeil.bootDone();
+const bootRequested=$('#bootEnter')?.dataset.requested==='true';
+title();updateUI();requestAnimationFrame(frame);
+if(bootRequested)($('#continueRun')||$('#start')).click();
 
 export {game,start,processEvents};
