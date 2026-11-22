@@ -45,6 +45,22 @@ test('a missing veil node never freezes the frame loop',()=>{
  veil.show();assert.equal(veil.isBlocking(),false);
 });
 
+test('static cover and decoded rooms skip the overlay, while a cold room waits for its images',async()=>{
+ globalThis.document={documentElement:{setAttribute(){},removeAttribute(){}}};
+ const node=fakeNode();node.hidden=true;
+ const veil=createLoadingVeil(node,{minShow:60000,fade:1});
+ veil.bootDone();
+ assert.equal(veil.isBlocking(),false);
+ veil.show('cached');veil.hide('ready',Promise.resolve(),{immediate:true});
+ assert.equal(node.hidden,true);
+ assert.equal(veil.isBlocking(),false);
+ let resolveImage;veil.show('cold',{min:0});
+ veil.hide('ready',new Promise(resolve=>{resolveImage=resolve}));
+ assert.equal(veil.isBlocking(),true);
+ resolveImage();await sleep(30);
+ assert.equal(veil.isBlocking(),false);
+});
+
 test('a stale atlas cannot uncover another chapter, and a stalled request has a deadline',async()=>{
  globalThis.document={documentElement:{setAttribute(){},removeAttribute(){}}};
  const veil=createLoadingVeil(fakeNode(),{minShow:1,fade:1,maxWait:90});

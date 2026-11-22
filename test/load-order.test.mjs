@@ -69,3 +69,46 @@ test('a failed WebP keeps the same atlas and waits for its PNG before declaring 
  nativePng.onerror();
  assert.equal(await artLoaded(nativePng),false);
 });
+
+test('first-room hints and runtime requests have identical URLs under a deployment prefix',async()=>{
+ const {assetPath}=await import('../dist/asset-url.js');
+ const html=read('index.html');
+ const hints=[...html.matchAll(/<link rel="preload" as="image" href="([^"]+)"/g)].map(match=>match[1]);
+ const names=['cover-rescue-v2.png','rooms-bright-v1.png','naiwa-pixel-v2.png'];
+ assert.deepEqual(hints.sort(),names.map(assetPath).sort());
+ const entry=html.match(/<script type="module" src="([^"]+)"/)[1];
+ assert.ok(html.includes('<link rel="modulepreload" href="'+entry+'"'));
+});
+
+test('promoting an atlas shares its pending request and decode across title, renderer and PNG fallback',async()=>{
+ globalThis.document={documentElement:{hasAttribute:()=>true,removeAttribute(){}}};
+ try{
+  const {loadArt,artDecoded,preloadArt,releaseArt}=await import('../dist/asset-url.js?promote');
+  let finishDecode,decodes=0;const requests=[];
+  const room=loadArt({set src(url){requests.push(url)},decode(){decodes++;return new Promise(resolve=>{finishDecode=resolve})}},'rooms-bright-v1.png');
+  const optional=loadArt({},'mobs-milk-v1.png');
+  const result=preloadArt(room);
+  assert.equal(preloadArt(room),result);
+  assert.equal(requests.length,1);
+  assert.equal(optional.src,undefined);
+  room.onerror();
+  assert.match(requests[1],/rooms-bright-v1\.png$/);
+  releaseArt();
+  assert.equal(requests.length,2,'releasing the title must not restart the promoted request');
+  assert.match(optional.src,/mobs-milk-v1\.webp$/);
+  room.onload();await Promise.resolve();
+  assert.equal(decodes,1);assert.equal(artDecoded(room),false);
+  finishDecode();assert.equal(await result,true);assert.equal(artDecoded(room),true);
+  assert.equal(preloadArt(room),result);
+ }finally{delete globalThis.document}
+});
+
+test('old WebViews and already drawable images can proceed if explicit decoding is unavailable',async()=>{
+ const {loadArt,artDecoded,preloadArt}=await import('../dist/asset-url.js?old-webview');
+ for(const surface of [{},{naturalWidth:64,decode:async()=>{throw Error('decoder released')}}]){
+  const im=loadArt(surface,'icon-192.png'),result=preloadArt(im);
+  im.onload();assert.equal(await result,true);assert.ok(artDecoded(im));
+ }
+ const broken=loadArt({},'rooms-bright-v1.png'),failed=preloadArt(broken);
+ broken.onerror();broken.onerror();assert.equal(await failed,false);assert.equal(artDecoded(broken),false);
+});
