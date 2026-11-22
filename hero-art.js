@@ -2,7 +2,6 @@ import {atlasRegion} from './atlas-regions.js';
 import {selectedCostume,costumeById,costumeImage} from './costumes.js';
 import {COSTUME_REGIONS} from './costume-regions.js';
 import {FROG_JUMP_SECONDS} from './frog-jump.js';
-costumeImage('original');
 const tinted=new Map();
 export function heroFrame(g){
  if(g.sandy?.left>0)return g.p.dash>0?13:(g.heroMoving?4+Math.floor((g.actionClock||0)*12)%4:8+Math.floor((g.actionClock||0)*12)%4);

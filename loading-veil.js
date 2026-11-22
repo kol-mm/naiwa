@@ -1,6 +1,5 @@
 // One loading veil for every jump: boot, new run, continue, and chapter changes.
-// The veil is already visible in index.html, so it covers the first paint before
-// the module graph has finished loading. This controller only owns its lifecycle.
+// The static cover shows progress during boot. The veil covers live room changes.
 const MIN_SHOW = 620;
 const FADE = 320;
 
@@ -12,8 +11,9 @@ export function createLoadingVeil(node, options = {}) {
   const now = options.now || (() => performance.now());
   const label = node.querySelector('[data-loading-label]');
   let shownAt = now();
-  let visible = true;
-  let blocking = true;
+  let minimum = minShow;
+  let visible = !node.hidden;
+  let blocking = visible;
   let hideTimer = 0;
   let fadeTimer = 0;
   let revision = 0;
@@ -35,34 +35,39 @@ export function createLoadingVeil(node, options = {}) {
     node.setAttribute('aria-busy', 'true');
     setLabel(text);
     shownAt = now();
+    minimum = min;
     document.documentElement?.setAttribute?.('data-loading', 'true');
   }
 
-  function finish() {
+  function dismiss() {
+    node.hidden = true;
+    blocking = false;
+    node.classList.remove('is-hiding');
+    document.documentElement?.removeAttribute?.('data-loading');
+  }
+
+  function finish(immediate = false) {
     if (!visible) return;
     visible = false;
     node.classList.remove('is-visible');
     node.classList.add('is-hiding');
     node.setAttribute('aria-busy', 'false');
-    fadeTimer = setTimeout(() => {
-      node.hidden = true;
-      blocking = false;
-      node.classList.remove('is-hiding');
-      document.documentElement?.removeAttribute?.('data-loading');
-    }, fade);
+    if (immediate) dismiss();
+    else fadeTimer = setTimeout(dismiss, fade);
   }
 
-  function hide(text, ready) {
+  function hide(text, ready, {immediate = false} = {}) {
     if (!visible) return;
     const ticket = ++revision;
     clearTimeout(hideTimer);
     clearTimeout(fadeTimer);
+    if (immediate) { setLabel(text); finish(true); return; }
     function reveal() {
       if (revision !== ticket) return;
       revision++;
       clearTimeout(hideTimer);
       setLabel(text);
-      const wait = Math.max(0, minShow - (now() - shownAt));
+      const wait = Math.max(0, minimum - (now() - shownAt));
       hideTimer = setTimeout(finish, wait);
     }
     if (ready) {
@@ -75,6 +80,7 @@ export function createLoadingVeil(node, options = {}) {
   }
 
   function bootDone(text = '池塘已就绪') {
+    minimum = 0;
     setLabel(text);
     hide();
   }
