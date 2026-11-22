@@ -5,11 +5,14 @@ const FADE = 320;
 
 export function createLoadingVeil(node, options = {}) {
   if (!node) return {show() {}, hide() {}, bootDone() {}, isVisible: () => false, isBlocking: () => false};
-  const minShow = options.minShow || MIN_SHOW;
-  const fade = options.fade || FADE;
+  const minShow = options.minShow ?? MIN_SHOW;
+  const fade = options.fade ?? FADE;
   const maxWait = options.maxWait ?? 6000;
   const now = options.now || (() => performance.now());
   const label = node.querySelector('[data-loading-label]');
+  const recovery = node.querySelector('[data-loading-recovery]');
+  const retryButton = node.querySelector('[data-loading-retry]');
+  const backButton = node.querySelector('[data-loading-back]');
   let shownAt = now();
   let minimum = minShow;
   let visible = !node.hidden;
@@ -22,11 +25,18 @@ export function createLoadingVeil(node, options = {}) {
     if (text && label) label.textContent = text;
   }
 
+  function clearRecovery() {
+    if (recovery) recovery.hidden = true;
+    if (retryButton) retryButton.onclick = null;
+    if (backButton) backButton.onclick = null;
+  }
+
   function show(text, {min = minShow} = {}) {
     revision++;
     clearTimeout(hideTimer);
     clearTimeout(fadeTimer);
     hideTimer = fadeTimer = 0;
+    clearRecovery();
     visible = true;
     blocking = true;
     node.hidden = false;
@@ -49,6 +59,7 @@ export function createLoadingVeil(node, options = {}) {
   function finish(immediate = false) {
     if (!visible) return;
     visible = false;
+    clearRecovery();
     node.classList.remove('is-visible');
     node.classList.add('is-hiding');
     node.setAttribute('aria-busy', 'false');
@@ -56,24 +67,38 @@ export function createLoadingVeil(node, options = {}) {
     else fadeTimer = setTimeout(dismiss, fade);
   }
 
-  function hide(text, ready, {immediate = false} = {}) {
+  function hide(text, ready, {immediate = false, beforeReveal, retry, back} = {}) {
     if (!visible) return;
     const ticket = ++revision;
     clearTimeout(hideTimer);
     clearTimeout(fadeTimer);
-    if (immediate) { setLabel(text); finish(true); return; }
+    clearRecovery();
     function reveal() {
       if (revision !== ticket) return;
-      revision++;
       clearTimeout(hideTimer);
       setLabel(text);
-      const wait = Math.max(0, minimum - (now() - shownAt));
-      hideTimer = setTimeout(finish, wait);
+      clearRecovery();
+      function uncover() {
+        if (revision !== ticket) return;
+        beforeReveal?.();
+        finish(immediate);
+      }
+      const wait = immediate ? 0 : Math.max(0, minimum - (now() - shownAt));
+      if (wait) hideTimer = setTimeout(uncover, wait);
+      else uncover();
     }
-    if (ready) {
-      // An interrupted image request must not freeze gameplay indefinitely.
-      hideTimer = setTimeout(reveal, maxWait);
-      Promise.resolve(ready).then(reveal, reveal);
+    function offerRecovery(message) {
+      if (revision !== ticket) return;
+      clearTimeout(hideTimer);
+      setLabel(message);
+      if (recovery) recovery.hidden = !(retry || back);
+      if (retryButton) retryButton.onclick = retry;
+      if (backButton) backButton.onclick = back;
+    }
+    if (ready && !immediate) {
+      hideTimer = setTimeout(() => offerRecovery('贴图还在加载…'), maxWait);
+      const failed = () => offerRecovery('这间房的贴图加载失败');
+      Promise.resolve(ready).then(ok => ok === false ? failed() : reveal(), failed);
     } else {
       reveal();
     }

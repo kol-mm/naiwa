@@ -10,14 +10,14 @@ import {playPlayerLaugh,requestBossCue,createRoomVoiceBoundary,setGameSound} fro
 import {drawItemReadiness} from './item-vfx.js';
 import {ItemAudio,ownsItemVoice} from './item-audio.js';
 import {drawChrono} from './chrono-art.js';
-import {sandyActive} from './chrono-items.js';
+import {FOLLOWERS} from './followers.js';
 import {itemIcon} from './item-icons.js';
 import {BossAudio} from './boss-audio.js';
 import {canRevive} from './revive.js';
 import {createRevivePlayer} from './revive-ui.js';
 import {requestGameFullscreen,toggleGameFullscreen,keepGameFullscreen,installFullscreenKeeper} from './fullscreen.js';
 import {toVirtualPoint,virtualRect} from './rotate-view.js';
-import {prepareRoomArt,prepareChapterArt,prepareBossArt,bossArtDue,enemyIndicatorY} from './sprite-art.js';
+import {spriteImage,prepareRoomArt,prepareChapterArt,prepareBossArt,bossArtDue,enemyIndicatorY} from './sprite-art.js';
 import {drawPixelEffect,drawPickup} from './pixel-effects.js';
 import {GameAudio} from './game-audio.js';
 import {isRescueKey} from './rescue.js';
@@ -31,7 +31,7 @@ import {drawTerrain} from './terrain-art.js';
 import {createStatsPanel} from './stats.js';
 import {Game,ITEMS,W,H,CHAPTERS,BOSS_NAMES} from './campaign.js';
 import {drawCampaign,drawBoss,drawRunner} from './campaign-art.js';
-import {artDecoded,preloadArt,assetPath,releaseArt} from './asset-url.js';
+import {artDecoded,preloadArt,retryArt,collectFrameArt,assetPath,releaseArt} from './asset-url.js';
 import {readPreferences,writePreferences,renderCap,safeStorage} from './preferences.js';
 import {readConnectedGamepad,gamepadPauseAction} from './gamepad.js';
 import {settingsHTML,bindSettings} from './settings-ui.js';
@@ -129,12 +129,35 @@ function saveCurrentRun(){
 }
 function entryImages(run,costume){
  const images=prepareRoomArt(run?.room,run?.mode);
+ if(run&&FOLLOWERS.some(id=>run.has(id)))images.push(spriteImage('followers-family-v2.png'));
  images.push(costumeImage(costume));
  if(costume&&costume!=='original')images.push(costumeImage('original'));
  return images;
 }
 function revealChapter(label,images=entryImages(game,selectedCostume())){
- loadingVeil.hide(label,Promise.all(images.map(preloadArt)),{immediate:images.every(artDecoded)});
+ // Paint while covered. A restored room can contain followers, pickups or effects
+ // whose sheets are only looked up by the renderer.
+ const needed=collectFrameArt(()=>paintScene(false));
+ for(const image of images)needed.add(image);
+ const sheets=[...needed],cached=sheets.every(artDecoded);
+ const ready=cached?null:Promise.all(sheets.map(preloadArt)).then(results=>results.every(Boolean));
+ loadingVeil.hide(label,ready,{
+  immediate:cached,
+  beforeReveal:cached?undefined:()=>paintScene(false),
+  retry(){
+   loadingVeil.show('正在重新加载贴图…',{min:0});
+   for(const sheet of sheets)retryArt(sheet);
+   revealChapter(label,images);
+   canvas.focus();
+  },
+  back(){
+   saveAndTitle();
+   if(game.mode==='title'){
+    loadingVeil.hide(null,null,{immediate:true});
+    ($('#continueRun')||$('#start'))?.focus();
+   }
+  }
+ });
 }
 function continueRun(){
  loadingVeil.show('正在恢复上次冒险…',{min:0});
@@ -274,7 +297,7 @@ function prepareActiveRoom(){
  if(game.mode==='title'||game.room===preparedRoom)return;
  const room=preparedRoom=game.room;
  const images=entryImages(game,selectedCostume());
- if(!loadingVeil.isBlocking()&&!images.every(artDecoded)){
+ if(!loadingVeil.isBlocking()&&game.floor===floorSeen){
   loadingVeil.show('正在准备房间…',{min:0});
   revealChapter('房间已就绪',images);
  }
@@ -305,8 +328,19 @@ function roomDraw(t){const r=game.room;drawPixelFloor(ctx,r,game.floor);
  if(game.pickup){const q=game.pickup;if(q.type==='heart'){ellipse(q.x,q.y+16,15,5,'#50674425');ctx.font='bold 31px sans-serif';ctx.textAlign='center';ctx.fillStyle='#ec9984';ctx.strokeStyle='#af6e62';ctx.lineWidth=2;ctx.strokeText('♥',q.x,q.y+7+Math.sin(t*4)*4);ctx.fillText('♥',q.x,q.y+7+Math.sin(t*4)*4)}else{ellipse(q.x,q.y,64+Math.sin(t*3)*3,35,'#729b78');lily(q.x,q.y,2.4);ctx.fillStyle='#f0edb6';ctx.font='bold 18px sans-serif';ctx.textAlign='center';ctx.fillText('↓ 下一层',q.x,q.y+5)}}
 }
 function enemy(e,t){if(e.dead&&t-(e.deadAt??0)>.65)return;ctx.save();if(e.hit>0)ctx.globalAlpha=.65;drawPixelEnemy(ctx,e,t);if(!e.dead&&e.echoUntil>game.elapsed){pixelRing(ctx,e.x-27,enemyIndicatorY(e)-9,5,'#294d79',3);pixelRing(ctx,e.x-27,enemyIndicatorY(e)-9,8,'#86cdec',2)}if(!e.dead&&e.poison>0){ctx.fillStyle='#b8e877';ctx.fillRect(e.x-3,enemyIndicatorY(e)-8,6,6)}if(!e.dead&&e.type!=='boss'&&e.hp<e.maxHp){ctx.fillStyle='#303a42';ctx.fillRect(e.x-18,enemyIndicatorY(e),36,5);ctx.fillStyle='#f5cb89';ctx.fillRect(e.x-17,enemyIndicatorY(e)+1,34*Math.max(0,e.hp/e.maxHp),3)}ctx.restore()}
-function draw(t){renderer.beginFrame();ctx.save();if(shake>0){const amount=shake*prefs.shake;if(amount>0)ctx.translate(Math.sin(t*70)*amount,Math.cos(t*85)*amount);shake*=.87;if(shake<.2)shake=0}roomDraw(t);drawCampaign(ctx,game,t);for(const e of game.room.enemies)if(!e.dead&&e.starMark>0){ctx.fillStyle='#f5d877';ctx.font='bold 18px system-ui';ctx.textAlign='center';ctx.fillText('☆',e.x,enemyIndicatorY(e)-7)}for(const b of game.bullets){drawPixelShot(ctx,b,false)}
- for(const e of game.room.enemies||[])enemy(e,t);const p=game.p;drawChrono(ctx,game);if(p.dash>0){for(let i=1;i<4;i++){ctx.globalAlpha=.16/i;drawHero(ctx,game,p.x-p.dx*i*19,p.y-p.dy*i*19,1,true)}ctx.globalAlpha=1}if(sandyActive(game)||p.inv<=0||Math.floor(t*14)%2===0){if(!drawHero(ctx,game,p.x,p.y))frog(p.x,p.y,1,t);if(p.shield){pixelRing(ctx,p.x,p.y,44,'#bde8cb',3);for(let i=0;i<4;i++){const a=t*1.5+i*Math.PI/2;ctx.fillStyle='#fff1b1';ctx.fillRect(p.x+Math.cos(a)*44-3,p.y+Math.sin(a)*44-3,6,6)}}if(game.has('tadpole')){const px=p.x-37,py=p.y+25+Math.sin(t*5)*5;line([[px,py],[px-15,py+8],[px-25,py+Math.sin(t*10)*8]],'#4a7264',5);ellipse(px,py,10,12,'#749e88','#4e7765');ellipse(px+3,py-3,3,4,'#e8efc7')}}
+function paintScene(animate){
+ draw(game.elapsed,animate);
+ if(sandbox.active)drawSandboxOverlay(ctx,game,sandbox,fps);
+ updateRescueUI(overlay,game);
+}
+function draw(t,animate){renderer.beginFrame();ctx.save();if(shake>0){const amount=shake*prefs.shake;if(amount>0)ctx.translate(Math.sin(t*70)*amount,Math.cos(t*85)*amount);if(animate)shake*=.87;if(shake<.2)shake=0}roomDraw(t);drawCampaign(ctx,game,t);for(const e of game.room.enemies)if(!e.dead&&e.starMark>0){ctx.fillStyle='#f5d877';ctx.font='bold 18px system-ui';ctx.textAlign='center';ctx.fillText('☆',e.x,enemyIndicatorY(e)-7)}for(const b of game.bullets){drawPixelShot(ctx,b,false)}
+ for(const e of game.room.enemies||[])enemy(e,t);
+ const p=game.p;drawChrono(ctx,game);
+ if(p.dash>0){for(let i=1;i<4;i++){ctx.globalAlpha=.16/i;drawHero(ctx,game,p.x-p.dx*i*19,p.y-p.dy*i*19,1,true)}ctx.globalAlpha=1}
+ // Invulnerability also applies on every doorway. Actual hits already have a hurt pose.
+ if(!drawHero(ctx,game,p.x,p.y))frog(p.x,p.y,1,t);
+ if(p.shield){pixelRing(ctx,p.x,p.y,44,'#bde8cb',3);for(let i=0;i<4;i++){const a=t*1.5+i*Math.PI/2;ctx.fillStyle='#fff1b1';ctx.fillRect(p.x+Math.cos(a)*44-3,p.y+Math.sin(a)*44-3,6,6)}}
+ if(game.has('tadpole')){const px=p.x-37,py=p.y+25+Math.sin(t*5)*5;line([[px,py],[px-15,py+8],[px-25,py+Math.sin(t*10)*8]],'#4a7264',5);ellipse(px,py,10,12,'#749e88','#4e7765');ellipse(px+3,py-3,3,4,'#e8efc7')}
  drawItemReadiness(ctx,game);drawLaughReady(ctx,game,reducedMotion.matches);for(const e of game.effects)drawPixelEffect(ctx,e);for(const v of game.particles){ctx.globalAlpha=Math.min(1,v.life*3);ctx.fillStyle=v.color;ctx.fillRect(Math.round(v.x),Math.round(v.y),Math.max(2,Math.round(v.r)),Math.max(2,Math.round(v.r)))}ctx.globalAlpha=1;for(const b of game.enemyBullets){drawPixelShot(ctx,b,true)}
  if(mouseAimActive&&mouse.down&&game.mode==='play'){const pc=game.p,aim=cardinalAim(mouse.x-pc.x,mouse.y-pc.y);if(aim.x||aim.y){const dist=Math.min(220,Math.max(44,Math.hypot(mouse.x-pc.x,mouse.y-pc.y))),sx=pc.x,sy=pc.y-6,tx=sx+aim.x*dist,ty=sy+aim.y*dist;ctx.save();ctx.strokeStyle='#f5f5d733';ctx.lineWidth=2;ctx.setLineDash([6,7]);ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(tx,ty);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#f5f5d7cc';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(tx,ty,6,0,Math.PI*2);ctx.stroke();line(aim.x?[[tx,ty-8],[tx,ty-3]]:[[tx-8,ty],[tx-3,ty]],'#f5f5d7cc');line(aim.x?[[tx,ty+3],[tx,ty+8]]:[[tx+3,ty],[tx+8,ty]],'#f5f5d7cc');ctx.restore()}}ctx.restore();const bosses=game.room.enemies?.filter(e=>e.type==='boss'&&!e.dead)||[];const boss=bosses[0];$('#bossbar').hidden=!boss;if(boss){$('#bossbar span').textContent=BOSS_NAMES[game.floor-1];$('#bossbar i').style.width=Math.max(0,bosses.reduce((s,e)=>s+e.hp,0)/game.room.enemies.filter(e=>e.type==='boss').reduce((s,e)=>s+e.maxHp,0)*100)+'%'}$('#dashStatus').textContent=p.dashCD>0?`蛙跳冷却 · ${p.dashCD.toFixed(1)}s`:'空格 · 蛙跳就绪';}
 function readPadInput(){
@@ -322,8 +356,8 @@ function frame(now){if(now>last)fps+=(Math.min(240,1000/(now-last))-fps)*.08;con
  padPaused=!!pad?.pause;
  const mx=clampInput((keys.has('d')?1:0)-(keys.has('a')?1:0)+move.x+(pad?.mx||0)),my=clampInput((keys.has('s')?1:0)-(keys.has('w')?1:0)+move.y+(pad?.my||0));let ax=(keys.has('arrowright')?1:0)-(keys.has('arrowleft')?1:0),ay=(keys.has('arrowdown')?1:0)-(keys.has('arrowup')?1:0),fire=!!(ax||ay);
  const padAiming=!!(pad&&(pad.ax||pad.ay));if(padAiming){ax=pad.ax;ay=pad.ay;fire=true}
- const attack=mobileAttack({held:touchFire,aim:touchAim,playing:game.mode==='play'}),actions=touchActions.take(),touchAiming=attack.fire,mouseControlsAim=mouse.down&&game.mode==='play'&&!fire&&!padAiming&&!touchAiming;if(mouseControlsAim){ax=mouse.x-game.p.x;ay=mouse.y-game.p.y;fire=true}mouseAimActive=mouseControlsAim;if(!fire&&touchAiming){ax=attack.ax;ay=attack.ay;fire=true}const direction=cardinalAim(ax,ay);ax=direction.x;ay=direction.y;fire=fire&&!!(ax||ay);const wasDash=game.p.dash>0,oldX=game.p.x,oldY=game.p.y;game.update(dt,{mx,my,ax,ay,fire,auto:false,dash:keys.has(' ')||actions.dash||!!pad?.dash,bomb:keys.has('b')||actions.bomb||!!pad?.bomb,use:keys.has('e')||actions.use||!!pad?.use,active:keys.has('q')||actions.active||!!pad?.active});game.heroMoving=game.mode==='play'&&Math.hypot(game.p.x-oldX,game.p.y-oldY)>.1;if(wasDash&&game.p.dash<=0)game.heroLandUntil=game.elapsed+.12;processEvents();syncFloorTransition();bossVoice.update(game.mode==='play');itemVoice.update(game.mode==='play');updateStats(game);updateLaughReady(game,dt);updateTouchStatus();$('#resources').textContent='金币 '+game.coins+'　钥匙 '+game.keys+'　炸弹 '+game.bombs+'　爆笑 '+Math.floor(game.activeCharge)+'/'+game.activeCost();draw(game.elapsed);if(sandbox.active)drawSandboxOverlay(ctx,game,sandbox,fps);updateRescueUI(overlay,game);revivePlayer.update();if(hasRun&&now-lastSaveAt>=2000)saveCurrentRun();if(now-codexCheckedAt>=500){codexCheckedAt=now;noteCodex()}requestAnimationFrame(frame)}
-window.addEventListener('keydown',e=>{if(game.mode==='settings'&&(e.key==='Escape'||e.key==='p'||e.key==='P')){e.preventDefault();closeSettings();return}if(codexReturn){codexKey(e);return}const k=e.key.toLowerCase();if(k==='t'&&sandbox.active&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.isComposing){e.preventDefault();if(!e.repeat)toggleSandboxPanel();return}if(game.mode==='rescue'&&(document.activeElement?.id==='rescueLaugh'||!['BUTTON','INPUT','TEXTAREA'].includes(document.activeElement?.tagName))&&k!=='p'&&k!=='escape'){if(e.repeat){if([' ','enter'].includes(k))e.preventDefault();return}if(isRescueKey(e)){e.preventDefault();pressRescue();return}}if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)&&!['BUTTON','INPUT','TEXTAREA'].includes(document.activeElement?.tagName))e.preventDefault();if((k==='p'||k==='escape')&&!e.repeat)pause();keys.add(k)});window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));window.addEventListener('blur',()=>{voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();resetTouchInput();if(['play','rescue'].includes(game.mode))pause()});document.addEventListener('visibilitychange',()=>{if(document.hidden){voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();resetTouchInput();if(['play','rescue'].includes(game.mode))pause()}});canvas.addEventListener('pointermove',pointMouseAim);
+ const attack=mobileAttack({held:touchFire,aim:touchAim,playing:game.mode==='play'}),actions=touchActions.take(),touchAiming=attack.fire,mouseControlsAim=mouse.down&&game.mode==='play'&&!fire&&!padAiming&&!touchAiming;if(mouseControlsAim){ax=mouse.x-game.p.x;ay=mouse.y-game.p.y;fire=true}mouseAimActive=mouseControlsAim;if(!fire&&touchAiming){ax=attack.ax;ay=attack.ay;fire=true}const direction=cardinalAim(ax,ay);ax=direction.x;ay=direction.y;fire=fire&&!!(ax||ay);const wasDash=game.p.dash>0,oldX=game.p.x,oldY=game.p.y;game.update(dt,{mx,my,ax,ay,fire,auto:false,dash:keys.has(' ')||actions.dash||!!pad?.dash,bomb:keys.has('b')||actions.bomb||!!pad?.bomb,use:keys.has('e')||actions.use||!!pad?.use,active:keys.has('q')||actions.active||!!pad?.active});game.heroMoving=game.mode==='play'&&Math.hypot(game.p.x-oldX,game.p.y-oldY)>.1;if(wasDash&&game.p.dash<=0)game.heroLandUntil=game.elapsed+.12;processEvents();syncFloorTransition();bossVoice.update(game.mode==='play');itemVoice.update(game.mode==='play');updateStats(game);updateLaughReady(game,dt);updateTouchStatus();$('#resources').textContent='金币 '+game.coins+'　钥匙 '+game.keys+'　炸弹 '+game.bombs+'　爆笑 '+Math.floor(game.activeCharge)+'/'+game.activeCost();if(!loadingVeil.isBlocking())paintScene(true);revivePlayer.update();if(hasRun&&now-lastSaveAt>=2000)saveCurrentRun();if(now-codexCheckedAt>=500){codexCheckedAt=now;noteCodex()}requestAnimationFrame(frame)}
+window.addEventListener('keydown',e=>{if(loadingVeil.isBlocking())return;if(game.mode==='settings'&&(e.key==='Escape'||e.key==='p'||e.key==='P')){e.preventDefault();closeSettings();return}if(codexReturn){codexKey(e);return}const k=e.key.toLowerCase();if(k==='t'&&sandbox.active&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.isComposing){e.preventDefault();if(!e.repeat)toggleSandboxPanel();return}if(game.mode==='rescue'&&(document.activeElement?.id==='rescueLaugh'||!['BUTTON','INPUT','TEXTAREA'].includes(document.activeElement?.tagName))&&k!=='p'&&k!=='escape'){if(e.repeat){if([' ','enter'].includes(k))e.preventDefault();return}if(isRescueKey(e)){e.preventDefault();pressRescue();return}}if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)&&!['BUTTON','INPUT','TEXTAREA'].includes(document.activeElement?.tagName))e.preventDefault();if((k==='p'||k==='escape')&&!e.repeat)pause();keys.add(k)});window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));window.addEventListener('blur',()=>{voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();resetTouchInput();if(['play','rescue'].includes(game.mode))pause()});document.addEventListener('visibilitychange',()=>{if(document.hidden){voice.stop();bossVoice.stop();itemVoice.stop();soundMix.stopTone();resetTouchInput();if(['play','rescue'].includes(game.mode))pause()}});canvas.addEventListener('pointermove',pointMouseAim);
 canvas.addEventListener('pointerdown',beginMouseAim);
 canvas.addEventListener('pointerup',endMouseAim);
 canvas.addEventListener('pointercancel',endMouseAim);
